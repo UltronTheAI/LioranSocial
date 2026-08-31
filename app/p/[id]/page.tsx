@@ -57,7 +57,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      url: `/p/${id}`,
+      url: `/post/${id}`,
       siteName: 'LioranSocial',
       type: 'article',
       images: [

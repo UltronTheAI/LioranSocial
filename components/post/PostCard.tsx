@@ -171,9 +171,9 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
     }
   };
 
-  // Copy Link (Standard Instagram-style /p/[id] link)
+  // Copy Link (Direct /post/[id] link)
   const handleCopyLink = () => {
-    const postUrl = `${window.location.origin}/p/${post._id}`;
+    const postUrl = `${window.location.origin}/post/${post._id}`;
     navigator.clipboard.writeText(postUrl);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);

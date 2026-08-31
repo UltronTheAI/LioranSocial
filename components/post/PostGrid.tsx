@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Heart, MessageCircle, Copy, Image as ImageIcon } from 'lucide-react';
 import { PostCardData } from './PostCard';
 
 export interface PostGridProps {
   posts: PostCardData[];
-  onPostClick: (post: PostCardData) => void;
+  onPostClick?: (post: PostCardData) => void;
   emptyTitle?: string;
   emptySubtitle?: string;
 }
@@ -38,10 +39,16 @@ export function PostGrid({
         const isMulti = post.images.length > 1;
 
         return (
-          <div
+          <Link
             key={post._id}
-            onClick={() => onPostClick(post)}
-            className="relative aspect-square bg-[#121215] border border-[#27272a]/60 rounded-lg sm:rounded-xl overflow-hidden cursor-pointer group"
+            href={`/post/${post._id}`}
+            onClick={(e) => {
+              if (onPostClick) {
+                e.preventDefault();
+                onPostClick(post);
+              }
+            }}
+            className="relative aspect-square bg-[#121215] border border-[#27272a]/60 rounded-lg sm:rounded-xl overflow-hidden cursor-pointer group block"
           >
             {/* Thumbnail Image */}
             {coverImage ? (
@@ -76,7 +83,7 @@ export function PostGrid({
                 <span>{post.commentsCount || 0}</span>
               </div>
             </div>
-          </div>
+          </Link>
         );
       })}
     </div>

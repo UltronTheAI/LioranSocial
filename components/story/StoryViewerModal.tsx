@@ -564,7 +564,7 @@ export function StoryViewerModal({
                   href={
                     currentStory.sharedContent.contentType === 'reel'
                       ? `/reels#${currentStory.sharedContent.reelId || ''}`
-                      : `/u/${currentStory.sharedContent.authorUsername}#${currentStory.sharedContent.postId || ''}`
+                      : `/post/${currentStory.sharedContent.postId || ''}`
                   }
                   onClick={(e) => {
                     e.stopPropagation();
