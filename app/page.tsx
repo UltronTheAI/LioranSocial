@@ -155,7 +155,7 @@ export default function HomePage() {
     <AppShell>
       <div className="h-[calc(100dvh-3.5rem)] md:h-screen flex flex-col max-w-xl mx-auto w-full select-none overflow-hidden">
         {/* Pinned Top Story Circles Bar */}
-        <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-[#27272a]/60 bg-[#09090b]/95 backdrop-blur-md z-10">
+        <div className="shrink-0 px-3 sm:px-4 pt-3 pb-2 border-b border-[#27272a]/60 bg-[#09090b] z-10">
           <StoryCirclesBar />
         </div>
 

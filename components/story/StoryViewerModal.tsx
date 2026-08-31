@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   X,
@@ -434,12 +435,12 @@ export function StoryViewerModal({
     }
   };
 
-  if (!isOpen || !currentGroup || !currentStory) return null;
+  if (!isOpen || !currentGroup || !currentStory || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       onClick={handleSafeClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 select-none overflow-hidden"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black select-none overflow-hidden"
     >
       {/* Top Close Button (Desktop) */}
       <button
@@ -906,6 +907,7 @@ export function StoryViewerModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
