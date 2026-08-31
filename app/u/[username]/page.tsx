@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Grid,
+  Clapperboard,
   Bookmark,
   ShieldCheck,
   Calendar,
@@ -13,11 +14,13 @@ import {
   Settings,
   AlertCircle,
   Loader2,
+  Play,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { PostGrid } from '@/components/post/PostGrid';
 import { PostCardData } from '@/components/post/PostCard';
+import { ReelData } from '@/components/reel/ReelPlayer';
 import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import { FollowersListModal } from '@/components/profile/FollowersListModal';
@@ -46,11 +49,12 @@ export default function UserProfilePage({
   const [notFound, setNotFound] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
 
-  // Tabs & Posts State
-  const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
+  // Tabs & Media State
+  const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'saved'>('posts');
   const [userPosts, setUserPosts] = useState<PostCardData[]>([]);
+  const [userReels, setUserReels] = useState<ReelData[]>([]);
   const [savedPosts, setSavedPosts] = useState<PostCardData[]>([]);
-  const [postsLoading, setPostsLoading] = useState(true);
+  const [mediaLoading, setMediaLoading] = useState(true);
 
   // Modals state
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -84,6 +88,20 @@ export default function UserProfilePage({
       return [];
     } catch (e) {
       console.error('Fetch user posts error:', e);
+      return [];
+    }
+  }, [username]);
+
+  const fetchUserReelsData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/users/${username}/reels?limit=30`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) {
+        return data.reels || [];
+      }
+      return [];
+    } catch (e) {
+      console.error('Fetch user reels error:', e);
       return [];
     }
   }, [username]);
@@ -125,14 +143,21 @@ export default function UserProfilePage({
       fetchUserPostsData().then((posts) => {
         if (isMounted) {
           setUserPosts(posts);
-          setPostsLoading(false);
+          setMediaLoading(false);
+        }
+      });
+    } else if (activeTab === 'reels') {
+      fetchUserReelsData().then((reels) => {
+        if (isMounted) {
+          setUserReels(reels);
+          setMediaLoading(false);
         }
       });
     } else if (activeTab === 'saved') {
       fetchSavedPostsData().then((posts) => {
         if (isMounted) {
           setSavedPosts(posts);
-          setPostsLoading(false);
+          setMediaLoading(false);
         }
       });
     }
@@ -140,7 +165,7 @@ export default function UserProfilePage({
     return () => {
       isMounted = false;
     };
-  }, [activeTab, fetchUserPostsData, fetchSavedPostsData]);
+  }, [activeTab, fetchUserPostsData, fetchUserReelsData, fetchSavedPostsData]);
 
   const refreshProfile = useCallback(async () => {
     const result = await fetchProfileData();
@@ -158,7 +183,6 @@ export default function UserProfilePage({
 
     setIsFollowLoading(true);
 
-    // Optimistic UI update
     const nextIsFollowing = !profile.isFollowing;
     const nextFollowersCount = nextIsFollowing
       ? profile.user.followersCount + 1
@@ -392,7 +416,7 @@ export default function UserProfilePage({
         </div>
 
         {/* ================================================================= */}
-        {/* Posts and Saved Tabs Navigation */}
+        {/* Posts, Reels, and Saved Tabs Navigation */}
         {/* ================================================================= */}
         <div className="border-t border-[#27272a] pt-4 space-y-6">
           <div className="flex justify-center gap-8 text-xs font-semibold uppercase tracking-wider">
@@ -407,6 +431,19 @@ export default function UserProfilePage({
             >
               <Grid className="w-4 h-4" /> Posts
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('reels')}
+              className={`flex items-center gap-2 pb-2 transition-colors cursor-pointer ${
+                activeTab === 'reels'
+                  ? 'border-b-2 border-white text-white'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Clapperboard className="w-4 h-4" /> Reels
+            </button>
+
             {isSelf && (
               <button
                 type="button"
@@ -422,12 +459,60 @@ export default function UserProfilePage({
             )}
           </div>
 
-          {/* Posts Grid Container */}
-          {postsLoading ? (
+          {/* Media Grid Container */}
+          {mediaLoading ? (
             <div className="py-16 text-center text-zinc-500">
               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
             </div>
+          ) : activeTab === 'reels' ? (
+            /* REELS 3-column vertical 9:16 grid */
+            userReels.length === 0 ? (
+              <div className="bg-[#121215]/50 border border-dashed border-[#27272a] rounded-2xl py-16 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#18181b] border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500">
+                  <Clapperboard className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-white">No Reels Yet</h3>
+                  <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                    {isSelf
+                      ? 'Create and share short vertical videos.'
+                      : `@${user.username} hasn't published any reels yet.`}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+                {userReels.map((reel) => (
+                  <Link
+                    key={reel._id}
+                    href={`/reels#${reel._id}`}
+                    className="relative aspect-[9/16] bg-[#121215] border border-[#27272a]/60 rounded-xl overflow-hidden group cursor-pointer"
+                  >
+                    {reel.video.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={reel.video.thumbnail}
+                        alt="Reel thumbnail"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <video
+                        src={reel.video.secureUrl || reel.video.url}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2 sm:p-3">
+                      <div className="flex items-center gap-1.5 text-white text-xs font-bold">
+                        <Play className="w-3.5 h-3.5 fill-white" />
+                        <span>{reel.viewsCount || 0}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )
           ) : (
+            /* POSTS / SAVED 3-column square grid */
             <PostGrid
               posts={activeTab === 'posts' ? userPosts : savedPosts}
               onPostClick={(post) => setSelectedPostId(post._id)}

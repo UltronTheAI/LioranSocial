@@ -1,6 +1,7 @@
 import { connectToDatabase } from '@/lib/db';
 import User from '@/models/User';
 import Post from '@/models/Post';
+import Reel from '@/models/Reel';
 import Follow from '@/models/Follow';
 import { SafeUser } from '@/types/user';
 
@@ -15,12 +16,12 @@ export interface SearchUserResult extends SafeUser {
 export interface SearchResult {
   users: SearchUserResult[];
   posts: unknown[];
-  reels?: unknown[]; // Reserved for future Reels module
+  reels: unknown[];
 }
 
 export async function searchContent(
   query: string,
-  type: 'top' | 'users' | 'posts' = 'top',
+  type: 'top' | 'users' | 'posts' | 'reels' = 'top',
   currentUserId?: string,
   limit: number = 20
 ): Promise<SearchResult> {
@@ -28,12 +29,13 @@ export async function searchContent(
 
   const trimmed = query.trim();
   if (!trimmed) {
-    return { users: [], posts: [] };
+    return { users: [], posts: [], reels: [] };
   }
 
   const safePattern = new RegExp(escapeRegex(trimmed), 'i');
   let users: SearchUserResult[] = [];
   let posts: unknown[] = [];
+  let reels: unknown[] = [];
 
   // 1. Search Users if type is 'top' or 'users'
   if (type === 'top' || type === 'users') {
@@ -86,9 +88,28 @@ export async function searchContent(
     }));
   }
 
+  // 3. Search Reels if type is 'top' or 'reels'
+  if (type === 'top' || type === 'reels') {
+    const reelLimit = type === 'top' ? Math.min(limit, 10) : limit;
+    const foundReels = await Reel.find({
+      caption: safePattern,
+    })
+      .sort({ createdAt: -1 })
+      .limit(reelLimit)
+      .populate('authorId', 'username displayName avatar emailVerified')
+      .lean();
+
+    reels = foundReels.map((r) => ({
+      ...r,
+      _id: r._id.toString(),
+      author: r.authorId,
+      authorId: undefined,
+    }));
+  }
+
   return {
     users,
     posts,
+    reels,
   };
 }
-

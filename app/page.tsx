@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Sparkles, Users, Loader2, PlusSquare } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { StoryCirclesBar } from '@/components/story/StoryCirclesBar';
 import { PostCard, PostCardData } from '@/components/post/PostCard';
 import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { CreatePostModal } from '@/components/post/CreatePostModal';
@@ -122,6 +123,9 @@ export default function HomePage() {
   return (
     <AppShell>
       <div className="max-w-xl mx-auto px-3 sm:px-4 py-6 space-y-6">
+        {/* Story Circles Bar */}
+        <StoryCirclesBar />
+
         {/* Loading Skeletons */}
         {loading && (
           <div className="space-y-6">

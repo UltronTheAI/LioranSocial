@@ -12,9 +12,13 @@ import {
   Heart,
   User as UserIcon,
   LogOut,
+  Image as ImageIcon,
+  CircleDashed,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CreatePostModal } from '@/components/post/CreatePostModal';
+import { CreateReelModal } from '@/components/reel/CreateReelModal';
+import { CreateStoryModal } from '@/components/story/CreateStoryModal';
 import { PostCardData } from '@/components/post/PostCard';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +31,11 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  // Create Modal Options state
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
+  const [isCreateReelOpen, setIsCreateReelOpen] = useState(false);
+  const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
 
   const profileHref = user?.username ? `/u/${user.username}` : '/login';
 
@@ -37,15 +45,30 @@ export function AppShell({ children }: AppShellProps) {
       router.push('/login');
       return;
     }
-    setIsCreateModalOpen(true);
+    setShowCreateMenu(!showCreateMenu);
   };
 
   const handlePostCreated = (post: PostCardData) => {
-    // If on profile page or home page, can trigger soft refresh or route to profile
     if (pathname === '/') {
       window.location.reload();
     } else {
       router.push(`/u/${post.author.username}`);
+    }
+  };
+
+  const handleReelCreated = () => {
+    if (pathname === '/reels') {
+      window.location.reload();
+    } else {
+      router.push('/reels');
+    }
+  };
+
+  const handleStoryCreated = () => {
+    if (pathname === '/') {
+      window.location.reload();
+    } else {
+      router.push('/');
     }
   };
 
@@ -87,7 +110,7 @@ export function AppShell({ children }: AppShellProps) {
           </Link>
 
           {/* Navigation Links */}
-          <nav className="space-y-1">
+          <nav className="space-y-1 relative">
             {desktopNavItems.map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -97,14 +120,56 @@ export function AppShell({ children }: AppShellProps) {
 
               if (item.onClick) {
                 return (
-                  <button
-                    key={item.label}
-                    onClick={item.onClick}
-                    className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-[#121215] transition-all duration-150 text-left cursor-pointer"
-                  >
-                    <Icon className="w-5 h-5 text-zinc-400" />
-                    <span>{item.label}</span>
-                  </button>
+                  <div key={item.label} className="relative">
+                    <button
+                      onClick={item.onClick}
+                      className={cn(
+                        'w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150 text-left cursor-pointer',
+                        showCreateMenu
+                          ? 'bg-[#18181b] text-white font-semibold'
+                          : 'text-zinc-400 hover:text-white hover:bg-[#121215]'
+                      )}
+                    >
+                      <Icon className="w-5 h-5 text-zinc-400" />
+                      <span>{item.label}</span>
+                    </button>
+
+                    {/* Create Dropdown Popover */}
+                    {showCreateMenu && (
+                      <div className="absolute left-full top-0 ml-2 w-48 bg-[#18181b] border border-[#27272a] rounded-2xl shadow-2xl p-1.5 z-40 animate-in fade-in zoom-in-95 space-y-1">
+                        <button
+                          onClick={() => {
+                            setShowCreateMenu(false);
+                            setIsCreatePostOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors"
+                        >
+                          <ImageIcon className="w-4 h-4 text-emerald-400" />
+                          <span>Photo Post</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCreateMenu(false);
+                            setIsCreateReelOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors"
+                        >
+                          <Clapperboard className="w-4 h-4 text-rose-400" />
+                          <span>Video Reel</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCreateMenu(false);
+                            setIsCreateStoryOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors"
+                        >
+                          <CircleDashed className="w-4 h-4 text-amber-400" />
+                          <span>24h Story</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               }
 
@@ -221,14 +286,62 @@ export function AppShell({ children }: AppShellProps) {
 
           if (item.onClick) {
             return (
-              <button
-                key={item.label}
-                onClick={item.onClick}
-                className="p-2.5 rounded-xl text-zinc-400 hover:text-white transition-colors"
-                aria-label={item.label}
-              >
-                <Icon className="w-5 h-5" />
-              </button>
+              <div key={item.label} className="relative">
+                <button
+                  onClick={item.onClick}
+                  className="p-2.5 rounded-xl text-zinc-400 hover:text-white transition-colors"
+                  aria-label={item.label}
+                >
+                  <Icon className="w-5 h-5" />
+                </button>
+
+                {/* Mobile Create Popup */}
+                {showCreateMenu && (
+                  <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end justify-center p-4">
+                    <div className="w-full max-w-xs bg-[#18181b] border border-[#27272a] rounded-3xl p-3 shadow-2xl space-y-1 mb-16 animate-in slide-in-from-bottom duration-150">
+                      <div className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                        Create
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setIsCreatePostOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors"
+                      >
+                        <ImageIcon className="w-4 h-4 text-emerald-400" />
+                        <span>Photo Post</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setIsCreateReelOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors"
+                      >
+                        <Clapperboard className="w-4 h-4 text-rose-400" />
+                        <span>Video Reel</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setIsCreateStoryOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors"
+                      >
+                        <CircleDashed className="w-4 h-4 text-amber-400" />
+                        <span>24h Story</span>
+                      </button>
+                      <button
+                        onClick={() => setShowCreateMenu(false)}
+                        className="w-full py-2.5 text-center text-xs font-bold text-zinc-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           }
 
@@ -248,11 +361,23 @@ export function AppShell({ children }: AppShellProps) {
         })}
       </nav>
 
-      {/* Global Create Post Modal */}
+      {/* Global Creation Modals */}
       <CreatePostModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        isOpen={isCreatePostOpen}
+        onClose={() => setIsCreatePostOpen(false)}
         onPostCreated={handlePostCreated}
+      />
+
+      <CreateReelModal
+        isOpen={isCreateReelOpen}
+        onClose={() => setIsCreateReelOpen(false)}
+        onReelCreated={handleReelCreated}
+      />
+
+      <CreateStoryModal
+        isOpen={isCreateStoryOpen}
+        onClose={() => setIsCreateStoryOpen(false)}
+        onStoryCreated={handleStoryCreated}
       />
     </div>
   );
