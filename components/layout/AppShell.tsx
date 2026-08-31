@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home,
-  Compass,
+  Search,
+  Clapperboard,
+  MessageCircle,
   PlusSquare,
   Heart,
   User as UserIcon,
@@ -22,12 +24,26 @@ export function AppShell({ children }: AppShellProps) {
   const { user, logout, loading } = useAuth();
   const pathname = usePathname();
 
-  const navItems = [
+  const profileHref = user?.username ? `/u/${user.username}` : '/login';
+
+  // Desktop Navigation Items
+  const desktopNavItems = [
     { label: 'Home', href: '/', icon: Home },
-    { label: 'Explore', href: '/explore', icon: Compass },
-    { label: 'Notifications', href: '/notifications', icon: Heart },
+    { label: 'Search', href: '/search', icon: Search },
+    { label: 'Reels', href: '/reels', icon: Clapperboard },
+    { label: 'Messages', href: '/messages', icon: MessageCircle },
     { label: 'Create', href: '#create', icon: PlusSquare },
-    { label: 'Profile', href: '/profile', icon: UserIcon },
+    { label: 'Notifications', href: '/notifications', icon: Heart },
+    { label: 'Profile', href: profileHref, icon: UserIcon },
+  ];
+
+  // Mobile Bottom Navigation Items
+  const mobileNavItems = [
+    { label: 'Home', href: '/', icon: Home },
+    { label: 'Search', href: '/search', icon: Search },
+    { label: 'Create', href: '#create', icon: PlusSquare },
+    { label: 'Reels', href: '/reels', icon: Clapperboard },
+    { label: 'Profile', href: profileHref, icon: UserIcon },
   ];
 
   return (
@@ -48,10 +64,14 @@ export function AppShell({ children }: AppShellProps) {
           </Link>
 
           {/* Navigation Links */}
-          <nav className="space-y-1.5">
-            {navItems.map((item) => {
+          <nav className="space-y-1">
+            {desktopNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href;
+              const isActive =
+                item.href === '/'
+                  ? pathname === '/'
+                  : item.href !== '#create' && pathname.startsWith(item.href);
+
               return (
                 <Link
                   key={item.label}
@@ -75,7 +95,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="border-t border-[#27272a] pt-4 space-y-3">
           {user ? (
             <div className="flex items-center justify-between px-2 py-1">
-              <Link href="/profile" className="flex items-center gap-3 min-w-0 flex-1 group">
+              <Link href={`/u/${user.username}`} className="flex items-center gap-3 min-w-0 flex-1 group">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-zinc-700 to-zinc-900 border border-zinc-700 flex items-center justify-center text-sm font-bold text-white shrink-0 overflow-hidden">
                   {user.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -132,6 +152,9 @@ export function AppShell({ children }: AppShellProps) {
           <Link href="/notifications" className="p-2 text-zinc-400 hover:text-white">
             <Heart className="w-5 h-5" />
           </Link>
+          <Link href="/messages" className="p-2 text-zinc-400 hover:text-white">
+            <MessageCircle className="w-5 h-5" />
+          </Link>
           <button
             onClick={() => logout()}
             className="p-2 text-zinc-400 hover:text-rose-400"
@@ -153,9 +176,13 @@ export function AppShell({ children }: AppShellProps) {
       {/* Mobile Bottom Navigation Bar */}
       {/* ========================================================================= */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a] px-2 py-2 flex items-center justify-around z-30">
-        {navItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive =
+            item.href === '/'
+              ? pathname === '/'
+              : item.href !== '#create' && pathname.startsWith(item.href);
+
           return (
             <Link
               key={item.label}
