@@ -14,7 +14,6 @@ import {
   Settings,
   MessageCircle,
   AlertCircle,
-  Loader2,
   Play,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -59,6 +58,7 @@ export default function UserProfilePage({
   // Tabs & Media State (Initialized with lazy cache)
   const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'saved'>('posts');
   const [savedSubTab, setSavedSubTab] = useState<'posts' | 'reels'>('posts');
+  const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [userPosts, setUserPosts] = useState<PostCardData[]>(() => {
     return getStorageCache<PostCardData[]>(`lioran_cached_profile_posts_${username}`) || [];
   });
@@ -68,6 +68,24 @@ export default function UserProfilePage({
   const [savedPosts, setSavedPosts] = useState<PostCardData[]>([]);
   const [savedReels, setSavedReels] = useState<ReelData[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+
+  const handleTabChange = (newTab: 'posts' | 'reels' | 'saved') => {
+    if (newTab === activeTab) return;
+    setIsTabTransitioning(true);
+    setActiveTab(newTab);
+    setTimeout(() => {
+      setIsTabTransitioning(false);
+    }, 240);
+  };
+
+  const handleSavedSubTabChange = (newSubTab: 'posts' | 'reels') => {
+    if (newSubTab === savedSubTab) return;
+    setIsTabTransitioning(true);
+    setSavedSubTab(newSubTab);
+    setTimeout(() => {
+      setIsTabTransitioning(false);
+    }, 240);
+  };
 
   // Modals state
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -471,10 +489,10 @@ export default function UserProfilePage({
           <div className="flex justify-center gap-6 sm:gap-8 text-xs font-semibold uppercase tracking-wider">
             <button
               type="button"
-              onClick={() => setActiveTab('posts')}
-              className={`flex items-center gap-2 pb-2 transition-colors cursor-pointer ${
+              onClick={() => handleTabChange('posts')}
+              className={`flex items-center gap-2 pb-2 transition-all duration-200 cursor-pointer ${
                 activeTab === 'posts'
-                  ? 'border-b-2 border-white text-white'
+                  ? 'border-b-2 border-white text-white font-bold'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
@@ -483,10 +501,10 @@ export default function UserProfilePage({
 
             <button
               type="button"
-              onClick={() => setActiveTab('reels')}
-              className={`flex items-center gap-2 pb-2 transition-colors cursor-pointer ${
+              onClick={() => handleTabChange('reels')}
+              className={`flex items-center gap-2 pb-2 transition-all duration-200 cursor-pointer ${
                 activeTab === 'reels'
-                  ? 'border-b-2 border-white text-white'
+                  ? 'border-b-2 border-white text-white font-bold'
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
@@ -496,10 +514,10 @@ export default function UserProfilePage({
             {isSelf && (
               <button
                 type="button"
-                onClick={() => setActiveTab('saved')}
-                className={`flex items-center gap-2 pb-2 transition-colors cursor-pointer ${
+                onClick={() => handleTabChange('saved')}
+                className={`flex items-center gap-2 pb-2 transition-all duration-200 cursor-pointer ${
                   activeTab === 'saved'
-                    ? 'border-b-2 border-white text-white'
+                    ? 'border-b-2 border-white text-white font-bold'
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -510,9 +528,10 @@ export default function UserProfilePage({
 
           {/* Sub-tabs for Saved (Posts vs Reels) */}
           {activeTab === 'saved' && (
-            <div className="flex justify-center gap-3 pt-1">
+            <div className="flex justify-center gap-3 pt-1 animate-in fade-in duration-150">
               <button
-                onClick={() => setSavedSubTab('posts')}
+                type="button"
+                onClick={() => handleSavedSubTabChange('posts')}
                 className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer ${
                   savedSubTab === 'posts'
                     ? 'bg-white text-zinc-950 border-white font-bold'
@@ -522,7 +541,8 @@ export default function UserProfilePage({
                 Saved Photos ({savedPosts.length})
               </button>
               <button
-                onClick={() => setSavedSubTab('reels')}
+                type="button"
+                onClick={() => handleSavedSubTabChange('reels')}
                 className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer ${
                   savedSubTab === 'reels'
                     ? 'bg-white text-zinc-950 border-white font-bold'
@@ -534,15 +554,39 @@ export default function UserProfilePage({
             </div>
           )}
 
-          {/* Media Grid Container */}
-          {mediaLoading && userPosts.length === 0 && userReels.length === 0 ? (
-            <div className="py-16 text-center text-zinc-500">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-            </div>
+          {/* Media Grid Container with Smooth Loading Animation */}
+          {isTabTransitioning || (mediaLoading && userPosts.length === 0 && userReels.length === 0) ? (
+            /* Sleek Skeleton Shimmer Grid Matching Tab Aspect Ratio */
+            activeTab === 'reels' || (activeTab === 'saved' && savedSubTab === 'reels') ? (
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-3 animate-in fade-in duration-200">
+                {[...Array(6)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="relative aspect-[9/16] bg-[#141418] border border-[#27272a]/60 rounded-xl overflow-hidden animate-pulse flex flex-col justify-end p-2.5 sm:p-3"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3.5 h-3.5 rounded-full bg-zinc-800" />
+                      <div className="h-3 w-8 bg-zinc-800 rounded-md" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-3 animate-in fade-in duration-200">
+                {[...Array(6)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="aspect-square bg-[#141418] border border-[#27272a]/60 rounded-xl overflow-hidden animate-pulse flex items-center justify-center"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-zinc-800/60" />
+                  </div>
+                ))}
+              </div>
+            )
           ) : activeTab === 'reels' || (activeTab === 'saved' && savedSubTab === 'reels') ? (
             /* REELS 3-column vertical 9:16 grid */
             (activeTab === 'reels' ? userReels : savedReels).length === 0 ? (
-              <div className="bg-[#121215]/50 border border-dashed border-[#27272a] rounded-2xl py-16 text-center space-y-3">
+              <div className="bg-[#121215]/50 border border-dashed border-[#27272a] rounded-2xl py-16 text-center space-y-3 animate-in fade-in duration-200">
                 <div className="w-12 h-12 rounded-2xl bg-[#18181b] border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500">
                   <Clapperboard className="w-6 h-6" />
                 </div>
@@ -560,7 +604,7 @@ export default function UserProfilePage({
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-3 animate-in fade-in duration-200">
                 {(activeTab === 'reels' ? userReels : savedReels).map((reel) => (
                   <Link
                     key={reel._id}
@@ -592,18 +636,20 @@ export default function UserProfilePage({
             )
           ) : (
             /* POSTS / SAVED 3-column square grid */
-            <PostGrid
-              posts={activeTab === 'posts' ? userPosts : savedPosts}
-              onPostClick={(post) => setSelectedPostId(post._id)}
-              emptyTitle={activeTab === 'posts' ? 'No Posts Yet' : 'No Saved Posts'}
-              emptySubtitle={
-                activeTab === 'posts'
-                  ? isSelf
-                  ? 'Share your first photo with the world.'
-                  : `@${user.username} hasn't published any posts yet.`
-                  : 'Save photos and videos that you want to see again.'
-              }
-            />
+            <div className="animate-in fade-in duration-200">
+              <PostGrid
+                posts={activeTab === 'posts' ? userPosts : savedPosts}
+                onPostClick={(post) => setSelectedPostId(post._id)}
+                emptyTitle={activeTab === 'posts' ? 'No Posts Yet' : 'No Saved Posts'}
+                emptySubtitle={
+                  activeTab === 'posts'
+                    ? isSelf
+                    ? 'Share your first photo with the world.'
+                    : `@${user.username} hasn't published any posts yet.`
+                    : 'Save photos and videos that you want to see again.'
+                }
+              />
+            </div>
           )}
         </div>
       </div>
