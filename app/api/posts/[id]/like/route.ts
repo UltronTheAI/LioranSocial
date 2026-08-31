@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/db';
 import Post from '@/models/Post';
 import Like from '@/models/Like';
 import { getCurrentUser } from '@/lib/auth';
+import { createNotification } from '@/services/notification.service';
 
 export async function POST(
   req: NextRequest,
@@ -59,6 +60,14 @@ export async function POST(
           { $inc: { likesCount: 1 } },
           { new: true }
         );
+
+        // Send like notification to post author
+        createNotification({
+          recipientId: post.authorId.toString(),
+          senderId: currentUser._id,
+          type: 'like_post',
+          postId: post._id.toString(),
+        }).catch((e) => console.error('Notification error:', e));
 
         return NextResponse.json({
           isLiked: true,

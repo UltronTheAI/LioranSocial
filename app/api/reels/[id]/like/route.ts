@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/db';
 import Reel from '@/models/Reel';
 import ReelLike from '@/models/ReelLike';
 import { getCurrentUser } from '@/lib/auth';
+import { createNotification } from '@/services/notification.service';
 
 export async function POST(
   req: NextRequest,
@@ -56,6 +57,14 @@ export async function POST(
           { $inc: { likesCount: 1 } },
           { new: true }
         );
+
+        // Send like notification to reel author
+        createNotification({
+          recipientId: reel.authorId.toString(),
+          senderId: currentUser._id,
+          type: 'like_reel',
+          reelId: reel._id.toString(),
+        }).catch((e) => console.error('Notification error:', e));
 
         return NextResponse.json({
           isLiked: true,

@@ -3,6 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 import User from '@/models/User';
 import Follow from '@/models/Follow';
 import { getCurrentUser } from '@/lib/auth';
+import { createNotification } from '@/services/notification.service';
 
 export async function POST(
   req: NextRequest,
@@ -80,6 +81,13 @@ export async function POST(
           { $inc: { followersCount: 1 } },
           { new: true }
         );
+
+        // Send follow notification
+        createNotification({
+          recipientId: targetUser._id.toString(),
+          senderId: currentUser._id,
+          type: 'follow',
+        }).catch((e) => console.error('Notification error:', e));
 
         return NextResponse.json({
           message: `You are now following @${targetUser.username}`,

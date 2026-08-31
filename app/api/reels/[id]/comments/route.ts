@@ -5,6 +5,7 @@ import Reel from '@/models/Reel';
 import ReelComment from '@/models/ReelComment';
 import { getCurrentUser } from '@/lib/auth';
 import { createReelCommentSchema } from '@/validators/reel.schema';
+import { createNotification } from '@/services/notification.service';
 
 export async function GET(
   req: NextRequest,
@@ -111,6 +112,15 @@ export async function POST(
     await Reel.findByIdAndUpdate(reel._id, {
       $inc: { commentsCount: 1 },
     });
+
+    // Send comment notification to reel author
+    createNotification({
+      recipientId: reel.authorId.toString(),
+      senderId: currentUser._id,
+      type: 'comment_reel',
+      reelId: reel._id.toString(),
+      commentText: comment.text,
+    }).catch((e) => console.error('Notification error:', e));
 
     return NextResponse.json(
       {
