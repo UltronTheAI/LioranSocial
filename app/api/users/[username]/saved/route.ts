@@ -3,6 +3,8 @@ import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
 import Save from '@/models/Save';
 import Like from '@/models/Like';
+import ReelSave from '@/models/ReelSave';
+import ReelLike from '@/models/ReelLike';
 import { getCurrentUser } from '@/lib/auth';
 
 export async function GET(
@@ -18,28 +20,20 @@ export async function GET(
     const { username } = await props.params;
     const normalizedUsername = username.toLowerCase().trim();
 
-    // Saved posts are private to the account owner
+    // Saved items are private to the account owner
     if (currentUser.username !== normalizedUsername) {
       return NextResponse.json(
-        { error: 'You are not authorized to view saved posts for this user.' },
+        { error: 'You are not authorized to view saved items for this user.' },
         { status: 403 }
       );
     }
 
-    const { searchParams } = new URL(req.url);
-    const cursor = searchParams.get('cursor');
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '12', 10), 1), 30);
-
     await connectToDatabase();
 
-    const query: Record<string, unknown> = { userId: currentUser._id };
-    if (cursor && Types.ObjectId.isValid(cursor)) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
-    }
-
-    const saves = await Save.find(query)
+    // 1. Fetch saved posts
+    const savedPostsDocs = await Save.find({ userId: currentUser._id })
       .sort({ _id: -1 })
-      .limit(limit + 1)
+      .limit(50)
       .populate({
         path: 'postId',
         populate: {
@@ -49,12 +43,7 @@ export async function GET(
       })
       .lean();
 
-    const hasMore = saves.length > limit;
-    const items = hasMore ? saves.slice(0, limit) : saves;
-    const nextCursor = items.length > 0 ? items[items.length - 1]._id.toString() : null;
-
-    // Fetch likes for these posts
-    const validPosts = items
+    const validPosts = savedPostsDocs
       .filter((s) => s.postId)
       .map((s) => s.postId as unknown as {
         _id: Types.ObjectId;
@@ -69,11 +58,11 @@ export async function GET(
       });
 
     const postIds = validPosts.map((p) => p._id);
-    const likes = await Like.find({
+    const postLikes = await Like.find({
       userId: new Types.ObjectId(currentUser._id),
       postId: { $in: postIds },
     }).select('postId').lean();
-    const likedPostIds = new Set(likes.map((l) => l.postId.toString()));
+    const likedPostIds = new Set(postLikes.map((l) => l.postId.toString()));
 
     const formattedPosts = validPosts.map((p) => {
       const postIdStr = p._id.toString();
@@ -92,15 +81,67 @@ export async function GET(
       };
     });
 
+    // 2. Fetch saved reels
+    const savedReelsDocs = await ReelSave.find({ userId: currentUser._id })
+      .sort({ _id: -1 })
+      .limit(50)
+      .populate({
+        path: 'reelId',
+        populate: {
+          path: 'authorId',
+          select: 'username displayName avatar emailVerified',
+        },
+      })
+      .lean();
+
+    const validReels = savedReelsDocs
+      .filter((s) => s.reelId)
+      .map((s) => s.reelId as unknown as {
+        _id: Types.ObjectId;
+        authorId: unknown;
+        video: { url: string; secureUrl: string; thumbnail?: string; width?: number; height?: number; duration?: number };
+        caption: string;
+        mentions: string[];
+        likesCount: number;
+        commentsCount: number;
+        savesCount: number;
+        viewsCount: number;
+        createdAt: Date;
+      });
+
+    const reelIds = validReels.map((r) => r._id);
+    const reelLikes = await ReelLike.find({
+      userId: new Types.ObjectId(currentUser._id),
+      reelId: { $in: reelIds },
+    }).select('reelId').lean();
+    const likedReelIds = new Set(reelLikes.map((l) => l.reelId.toString()));
+
+    const formattedReels = validReels.map((r) => {
+      const reelIdStr = r._id.toString();
+      return {
+        _id: reelIdStr,
+        author: r.authorId,
+        video: r.video,
+        caption: r.caption,
+        mentions: r.mentions,
+        likesCount: r.likesCount || 0,
+        commentsCount: r.commentsCount || 0,
+        savesCount: r.savesCount || 0,
+        viewsCount: r.viewsCount || 0,
+        isLiked: likedReelIds.has(reelIdStr),
+        isSaved: true,
+        createdAt: r.createdAt,
+      };
+    });
+
     return NextResponse.json({
       posts: formattedPosts,
-      nextCursor: hasMore ? nextCursor : null,
-      hasMore,
+      reels: formattedReels,
     });
   } catch (error) {
-    console.error('Fetch saved posts error:', error);
+    console.error('Fetch saved items error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch saved posts.' },
+      { error: 'Failed to fetch saved items.' },
       { status: 500 }
     );
   }

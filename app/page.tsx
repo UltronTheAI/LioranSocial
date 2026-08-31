@@ -122,7 +122,7 @@ export default function HomePage() {
 
   return (
     <AppShell>
-      <div className="max-w-xl mx-auto px-3 sm:px-4 py-6 space-y-6">
+      <div className="max-w-xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-6 pb-24 md:pb-8">
         {/* Story Circles Bar */}
         <StoryCirclesBar />
 

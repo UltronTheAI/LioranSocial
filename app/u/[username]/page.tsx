@@ -52,9 +52,11 @@ export default function UserProfilePage({
 
   // Tabs & Media State
   const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'saved'>('posts');
+  const [savedSubTab, setSavedSubTab] = useState<'posts' | 'reels'>('posts');
   const [userPosts, setUserPosts] = useState<PostCardData[]>([]);
   const [userReels, setUserReels] = useState<ReelData[]>([]);
   const [savedPosts, setSavedPosts] = useState<PostCardData[]>([]);
+  const [savedReels, setSavedReels] = useState<ReelData[]>([]);
   const [mediaLoading, setMediaLoading] = useState(true);
 
   // Modals state
@@ -107,18 +109,18 @@ export default function UserProfilePage({
     }
   }, [username]);
 
-  const fetchSavedPostsData = useCallback(async () => {
-    if (!profile?.isSelf) return [];
+  const fetchSavedData = useCallback(async () => {
+    if (!profile?.isSelf) return { posts: [], reels: [] };
     try {
-      const res = await fetch(`/api/users/${username}/saved?limit=30`, { cache: 'no-store' });
+      const res = await fetch(`/api/users/${username}/saved?limit=50`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
-        return data.posts || [];
+        return { posts: data.posts || [], reels: data.reels || [] };
       }
-      return [];
+      return { posts: [], reels: [] };
     } catch (e) {
-      console.error('Fetch saved posts error:', e);
-      return [];
+      console.error('Fetch saved items error:', e);
+      return { posts: [], reels: [] };
     }
   }, [username, profile?.isSelf]);
 
@@ -155,9 +157,10 @@ export default function UserProfilePage({
         }
       });
     } else if (activeTab === 'saved') {
-      fetchSavedPostsData().then((posts) => {
+      fetchSavedData().then((result) => {
         if (isMounted) {
-          setSavedPosts(posts);
+          setSavedPosts(result.posts);
+          setSavedReels(result.reels);
           setMediaLoading(false);
         }
       });
@@ -166,7 +169,7 @@ export default function UserProfilePage({
     return () => {
       isMounted = false;
     };
-  }, [activeTab, fetchUserPostsData, fetchUserReelsData, fetchSavedPostsData]);
+  }, [activeTab, fetchUserPostsData, fetchUserReelsData, fetchSavedData]);
 
   const refreshProfile = useCallback(async () => {
     const result = await fetchProfileData();
@@ -233,15 +236,12 @@ export default function UserProfilePage({
         ...profile,
         user: updatedUser,
       });
-      if (updatedUser.username !== username) {
-        router.replace(`/u/${updatedUser.username}`);
-      }
     }
   };
 
-  const handlePostDeleted = (deletedPostId: string) => {
-    setUserPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
-    setSavedPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
+  const handlePostDeleted = (postId: string) => {
+    setUserPosts((prev) => prev.filter((p) => p._id !== postId));
+    setSavedPosts((prev) => prev.filter((p) => p._id !== postId));
     if (profile) {
       setProfile({
         ...profile,
@@ -256,13 +256,13 @@ export default function UserProfilePage({
   if (loading) {
     return (
       <AppShell>
-        <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 animate-pulse">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-zinc-800" />
-            <div className="space-y-3 flex-1 w-full text-center sm:text-left">
-              <div className="h-6 bg-zinc-800 rounded w-48 mx-auto sm:mx-0" />
-              <div className="h-4 bg-zinc-800 rounded w-32 mx-auto sm:mx-0" />
-              <div className="h-4 bg-zinc-800 rounded w-64 mx-auto sm:mx-0" />
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-pulse">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
+            <div className="w-24 h-24 sm:w-36 sm:h-36 rounded-full bg-zinc-800 shrink-0" />
+            <div className="space-y-4 w-full text-center md:text-left">
+              <div className="h-6 bg-zinc-800 rounded w-48 mx-auto md:mx-0" />
+              <div className="h-4 bg-zinc-800 rounded w-32 mx-auto md:mx-0" />
+              <div className="h-10 bg-zinc-800 rounded w-full max-w-sm mx-auto md:mx-0" />
             </div>
           </div>
         </div>
@@ -274,74 +274,74 @@ export default function UserProfilePage({
     return (
       <AppShell>
         <div className="max-w-md mx-auto px-4 py-20 text-center space-y-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#121215] border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500">
-            <AlertCircle className="w-6 h-6" />
+          <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500 shadow-xl">
+            <AlertCircle className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white">User Not Found</h2>
           <p className="text-sm text-zinc-400">
-            The user @{username} doesn&apos;t exist or might have been removed.
+            The profile for &quot;@{username}&quot; does not exist or may have been removed.
           </p>
-          <Link href="/">
-            <Button variant="secondary" size="sm">
-              Back to Home
-            </Button>
-          </Link>
+          <div className="pt-2">
+            <Link href="/">
+              <Button variant="secondary" size="md">
+                Back to Home
+              </Button>
+            </Link>
+          </div>
         </div>
       </AppShell>
     );
   }
 
   const { user, isFollowing, isSelf } = profile;
-  const joinDate = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('en-US', {
-        month: 'short',
-        year: 'numeric',
-      })
-    : null;
 
   return (
     <AppShell>
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 sm:space-y-8 pb-24 md:pb-8 select-none">
         {/* ================================================================= */}
-        {/* Profile Header */}
+        {/* Profile Header Area */}
         {/* ================================================================= */}
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8 bg-[#121215] border border-[#27272a] rounded-2xl p-6 sm:p-8">
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-4 sm:gap-8 md:gap-12">
           {/* Avatar */}
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-tr from-zinc-700 to-zinc-900 border-2 border-zinc-700 overflow-hidden flex items-center justify-center font-bold text-3xl text-white shrink-0 shadow-xl">
-            {user.avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatar} alt={user.displayName} className="w-full h-full object-cover" />
-            ) : (
-              user.displayName?.charAt(0).toUpperCase() || 'U'
-            )}
+          <div className="relative shrink-0">
+            <div className="w-20 h-20 sm:w-32 sm:h-32 rounded-full border-2 border-[#27272a] bg-zinc-800 overflow-hidden flex items-center justify-center text-3xl font-bold text-white shadow-xl">
+              {user.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatar}
+                  alt={user.displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                user.displayName?.charAt(0).toUpperCase() || 'U'
+              )}
+            </div>
           </div>
 
-          {/* User Details */}
-          <div className="flex-1 min-w-0 text-center sm:text-left space-y-3.5">
+          {/* User Details & Action Buttons */}
+          <div className="space-y-3 sm:space-y-4 flex-1 text-center md:text-left min-w-0 w-full">
+            {/* Username & Verification & Actions */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center justify-center sm:justify-start gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                    {user.displayName}
-                  </h1>
-                  {user.emailVerified && (
-                    <span title="Verified Account">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm font-mono text-zinc-400">@{user.username}</p>
+              <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight break-all">
+                  {user.displayName}
+                </h1>
+                {user.emailVerified && (
+                  <span title="Verified Account">
+                    <ShieldCheck className="w-5 h-5 text-blue-400 fill-blue-400/20" />
+                  </span>
+                )}
               </div>
 
               {/* Action Buttons */}
-              <div className="flex justify-center sm:justify-start gap-2">
+              <div className="flex items-center justify-center md:justify-start gap-2">
                 {isSelf ? (
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={() => setIsEditModalOpen(true)}
                     leftIcon={<Settings className="w-4 h-4" />}
-                    className="text-xs px-4"
+                    className="cursor-pointer"
                   >
                     Edit Profile
                   </Button>
@@ -350,88 +350,95 @@ export default function UserProfilePage({
                     <Button
                       variant={isFollowing ? 'secondary' : 'primary'}
                       size="sm"
-                      isLoading={isFollowLoading}
                       onClick={handleToggleFollow}
+                      isLoading={isFollowLoading}
                       leftIcon={
-                        isFollowing ? (
-                          <UserCheck className="w-4 h-4" />
+                        !isFollowLoading &&
+                        (isFollowing ? (
+                          <UserCheck className="w-4 h-4 text-zinc-300" />
                         ) : (
-                          <UserPlus className="w-4 h-4" />
-                        )
+                          <UserPlus className="w-4 h-4 text-zinc-950" />
+                        ))
                       }
-                      className="text-xs px-4"
+                      className="cursor-pointer"
                     >
                       {isFollowing ? 'Following' : 'Follow'}
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => router.push(`/messages?user=${user._id}`)}
-                      leftIcon={<MessageCircle className="w-4 h-4" />}
-                      className="text-xs px-4"
-                    >
-                      Message
-                    </Button>
+
+                    <Link href={`/messages?user=${user._id}`}>
+                      <Button variant="secondary" size="sm" leftIcon={<MessageCircle className="w-4 h-4" />}>
+                        Message
+                      </Button>
+                    </Link>
                   </>
                 )}
               </div>
             </div>
 
+            {/* Handle & Joined Date */}
+            <div className="flex items-center justify-center md:justify-start gap-3 text-xs text-zinc-400">
+              <span className="font-mono text-zinc-300">@{user.username}</span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5" />
+                Joined{' '}
+                {new Date(user.createdAt).toLocaleDateString('en-US', {
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+            </div>
+
             {/* Bio */}
             {user.bio ? (
-              <p className="text-sm text-zinc-300 leading-relaxed max-w-xl whitespace-pre-wrap">
+              <p className="text-xs sm:text-sm text-zinc-200 whitespace-pre-line leading-relaxed max-w-xl mx-auto md:mx-0">
                 {user.bio}
               </p>
             ) : (
-              <p className="text-xs text-zinc-500 italic">No bio available</p>
-            )}
-
-            {/* Joined Date */}
-            {joinDate && (
-              <p className="text-xs text-zinc-500 flex items-center justify-center sm:justify-start gap-1.5 pt-1">
-                <Calendar className="w-3.5 h-3.5" /> Joined {joinDate}
+              <p className="text-xs text-zinc-500 italic max-w-xl mx-auto md:mx-0">
+                {isSelf ? 'No bio yet. Click Edit Profile to add one.' : 'No bio provided.'}
               </p>
             )}
           </div>
         </div>
 
         {/* ================================================================= */}
-        {/* Stats Row */}
+        {/* Followers / Following / Posts Counts Row */}
         {/* ================================================================= */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          <div className="bg-[#121215] border border-[#27272a] rounded-xl p-4 text-center">
-            <p className="text-xl sm:text-2xl font-bold text-white">{user.postsCount || 0}</p>
-            <p className="text-xs text-zinc-400 mt-0.5">Posts</p>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 max-w-md mx-auto md:max-w-none pt-1">
+          <div className="bg-[#121215] border border-[#27272a] rounded-xl p-3 sm:p-4 text-center">
+            <p className="text-lg sm:text-2xl font-bold text-white">{user.postsCount || 0}</p>
+            <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5">Posts</p>
           </div>
 
           <button
             type="button"
             onClick={() => setFollowModalMode('followers')}
-            className="bg-[#121215] border border-[#27272a] hover:border-zinc-500 rounded-xl p-4 text-center transition-all cursor-pointer group"
+            className="bg-[#121215] border border-[#27272a] hover:border-zinc-500 rounded-xl p-3 sm:p-4 text-center transition-all cursor-pointer group"
           >
-            <p className="text-xl sm:text-2xl font-bold text-white group-hover:text-zinc-200">
+            <p className="text-lg sm:text-2xl font-bold text-white group-hover:text-zinc-200">
               {user.followersCount || 0}
             </p>
-            <p className="text-xs text-zinc-400 mt-0.5 group-hover:underline">Followers</p>
+            <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 group-hover:underline">Followers</p>
           </button>
 
           <button
             type="button"
             onClick={() => setFollowModalMode('following')}
-            className="bg-[#121215] border border-[#27272a] hover:border-zinc-500 rounded-xl p-4 text-center transition-all cursor-pointer group"
+            className="bg-[#121215] border border-[#27272a] hover:border-zinc-500 rounded-xl p-3 sm:p-4 text-center transition-all cursor-pointer group"
           >
-            <p className="text-xl sm:text-2xl font-bold text-white group-hover:text-zinc-200">
+            <p className="text-lg sm:text-2xl font-bold text-white group-hover:text-zinc-200">
               {user.followingCount || 0}
             </p>
-            <p className="text-xs text-zinc-400 mt-0.5 group-hover:underline">Following</p>
+            <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5 group-hover:underline">Following</p>
           </button>
         </div>
 
         {/* ================================================================= */}
         {/* Posts, Reels, and Saved Tabs Navigation */}
         {/* ================================================================= */}
-        <div className="border-t border-[#27272a] pt-4 space-y-6">
-          <div className="flex justify-center gap-8 text-xs font-semibold uppercase tracking-wider">
+        <div className="border-t border-[#27272a] pt-4 space-y-4 sm:space-y-6">
+          <div className="flex justify-center gap-6 sm:gap-8 text-xs font-semibold uppercase tracking-wider">
             <button
               type="button"
               onClick={() => setActiveTab('posts')}
@@ -471,22 +478,52 @@ export default function UserProfilePage({
             )}
           </div>
 
+          {/* Sub-tabs for Saved (Posts vs Reels) */}
+          {activeTab === 'saved' && (
+            <div className="flex justify-center gap-3 pt-1">
+              <button
+                onClick={() => setSavedSubTab('posts')}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer ${
+                  savedSubTab === 'posts'
+                    ? 'bg-white text-zinc-950 border-white font-bold'
+                    : 'bg-[#18181b] text-zinc-400 border-[#27272a] hover:text-white'
+                }`}
+              >
+                Saved Photos ({savedPosts.length})
+              </button>
+              <button
+                onClick={() => setSavedSubTab('reels')}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer ${
+                  savedSubTab === 'reels'
+                    ? 'bg-white text-zinc-950 border-white font-bold'
+                    : 'bg-[#18181b] text-zinc-400 border-[#27272a] hover:text-white'
+                }`}
+              >
+                Saved Reels ({savedReels.length})
+              </button>
+            </div>
+          )}
+
           {/* Media Grid Container */}
           {mediaLoading ? (
             <div className="py-16 text-center text-zinc-500">
               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
             </div>
-          ) : activeTab === 'reels' ? (
+          ) : activeTab === 'reels' || (activeTab === 'saved' && savedSubTab === 'reels') ? (
             /* REELS 3-column vertical 9:16 grid */
-            userReels.length === 0 ? (
+            (activeTab === 'reels' ? userReels : savedReels).length === 0 ? (
               <div className="bg-[#121215]/50 border border-dashed border-[#27272a] rounded-2xl py-16 text-center space-y-3">
                 <div className="w-12 h-12 rounded-2xl bg-[#18181b] border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500">
                   <Clapperboard className="w-6 h-6" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-white">No Reels Yet</h3>
-                  <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                    {isSelf
+                  <h3 className="text-sm font-semibold text-white">
+                    {activeTab === 'saved' ? 'No Saved Reels' : 'No Reels Yet'}
+                  </h3>
+                  <p className="text-xs text-zinc-400 max-w-sm mx-auto px-4">
+                    {activeTab === 'saved'
+                      ? 'Reels you save will appear here.'
+                      : isSelf
                       ? 'Create and share short vertical videos.'
                       : `@${user.username} hasn't published any reels yet.`}
                   </p>
@@ -494,7 +531,7 @@ export default function UserProfilePage({
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
-                {userReels.map((reel) => (
+                {(activeTab === 'reels' ? userReels : savedReels).map((reel) => (
                   <Link
                     key={reel._id}
                     href={`/reels#${reel._id}`}
@@ -532,8 +569,8 @@ export default function UserProfilePage({
               emptySubtitle={
                 activeTab === 'posts'
                   ? isSelf
-                    ? 'Share your first photo with the world.'
-                    : `@${user.username} hasn't published any posts yet.`
+                  ? 'Share your first photo with the world.'
+                  : `@${user.username} hasn't published any posts yet.`
                   : 'Save photos and videos that you want to see again.'
               }
             />

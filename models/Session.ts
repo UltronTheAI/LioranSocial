@@ -25,7 +25,6 @@ const SessionSchema = new Schema<ISession>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
     revokedAt: {
       type: Date,

@@ -9,8 +9,10 @@ import {
   Share2,
   MoreHorizontal,
   Trash2,
+  Edit2,
   Check,
   Send,
+  Loader2,
 } from 'lucide-react';
 import { ImageCarousel } from './ImageCarousel';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
@@ -41,6 +43,7 @@ export interface PostCardProps {
   post: PostCardData;
   onOpenComments?: (postId: string) => void;
   onPostDeleted?: (postId: string) => void;
+  onPostUpdated?: (post: PostCardData) => void;
 }
 
 function timeAgo(dateInput: string | Date): string {
@@ -55,9 +58,10 @@ function timeAgo(dateInput: string | Date): string {
   return `${Math.floor(diffInSeconds / 604800)}w`;
 }
 
-export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps) {
+export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }: PostCardProps) {
   const { user: currentUser } = useAuth();
 
+  const [currentCaption, setCurrentCaption] = useState(post.caption);
   const [isLiked, setIsLiked] = useState(post.isLiked);
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [isSaved, setIsSaved] = useState(post.isSaved);
@@ -69,6 +73,11 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  // Edit Caption state
+  const [isEditingCaption, setIsEditingCaption] = useState(false);
+  const [editCaptionValue, setEditCaptionValue] = useState(post.caption);
+  const [isSavingCaption, setIsSavingCaption] = useState(false);
 
   const isAuthor = currentUser && currentUser._id.toString() === post.author._id.toString();
 
@@ -128,6 +137,30 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
     setIsMenuOpen(false);
+  };
+
+  // Save Edited Caption
+  const handleSaveCaption = async () => {
+    setIsSavingCaption(true);
+    try {
+      const res = await fetch(`/api/posts/${post._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: editCaptionValue }),
+      });
+      if (res.ok) {
+        setCurrentCaption(editCaptionValue);
+        setIsEditingCaption(false);
+        if (onPostUpdated) {
+          onPostUpdated({ ...post, caption: editCaptionValue });
+        }
+      }
+    } catch (e) {
+      console.error('Update caption failed:', e);
+    } finally {
+      setIsSavingCaption(false);
+      setIsMenuOpen(false);
+    }
   };
 
   // Delete Post
@@ -198,7 +231,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
           <div className="relative">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/60 transition-colors"
+              className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/60 transition-colors cursor-pointer"
               title="More options"
             >
               <MoreHorizontal className="w-4 h-4" />
@@ -209,19 +242,31 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
               <div className="absolute right-0 top-full mt-1 w-40 bg-[#18181b] border border-[#27272a] rounded-xl shadow-xl py-1 z-20 animate-in fade-in zoom-in-95 duration-100">
                 <button
                   onClick={handleCopyLink}
-                  className="w-full text-left px-3.5 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2"
+                  className="w-full text-left px-3.5 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2 cursor-pointer"
                 >
                   {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
                   {isCopied ? 'Link Copied!' : 'Copy Link'}
                 </button>
                 {isAuthor && (
-                  <button
-                    onClick={handleDeletePost}
-                    className="w-full text-left px-3.5 py-2 text-xs text-rose-400 hover:bg-rose-950/40 flex items-center gap-2"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete Post
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        setIsEditingCaption(true);
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+                      Edit Caption
+                    </button>
+                    <button
+                      onClick={handleDeletePost}
+                      className="w-full text-left px-3.5 py-2 text-xs text-rose-400 hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Post
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -250,7 +295,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
         <div className="flex items-center gap-4">
           <button
             onClick={handleToggleLike}
-            className={`p-1 -ml-1 transition-transform active:scale-125 focus:outline-none ${
+            className={`p-1 -ml-1 transition-transform active:scale-125 focus:outline-none cursor-pointer ${
               isLiked ? 'text-rose-500 fill-rose-500' : 'text-zinc-300 hover:text-white'
             }`}
             aria-label={isLiked ? 'Unlike' : 'Like'}
@@ -260,7 +305,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
 
           <button
             onClick={() => onOpenComments && onOpenComments(post._id)}
-            className="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none"
+            className="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none cursor-pointer"
             aria-label="View comments"
           >
             <MessageCircle className="w-6 h-6" />
@@ -268,7 +313,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
 
           <button
             onClick={() => setIsShareModalOpen(true)}
-            className="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none"
+            className="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none cursor-pointer"
             title="Share post"
           >
             <Share2 className="w-5 h-5" />
@@ -277,7 +322,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
 
         <button
           onClick={handleToggleSave}
-          className={`p-1 -mr-1 transition-colors focus:outline-none ${
+          className={`p-1 -mr-1 transition-colors focus:outline-none cursor-pointer ${
             isSaved ? 'text-white fill-white' : 'text-zinc-300 hover:text-white'
           }`}
           aria-label={isSaved ? 'Remove Bookmark' : 'Bookmark'}
@@ -296,26 +341,59 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
           </p>
         )}
 
-        {post.caption && (
-          <div className="text-zinc-200 leading-relaxed">
-            <Link href={`/u/${post.author.username}`} className="font-semibold text-white hover:underline mr-1.5">
-              {post.author.username}
-            </Link>
-            <span>
-              {post.caption.length > 120 && !isExpanded
-                ? `${post.caption.slice(0, 120)}...`
-                : post.caption}
-            </span>
-            {post.caption.length > 120 && (
+        {isEditingCaption ? (
+          <div className="space-y-2 pt-1">
+            <textarea
+              value={editCaptionValue}
+              onChange={(e) => setEditCaptionValue(e.target.value)}
+              className="w-full bg-[#18181b] border border-zinc-700 rounded-xl p-2.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-white"
+              rows={3}
+              maxLength={500}
+            />
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="text-zinc-400 hover:text-white ml-1 font-medium focus:outline-none"
+                onClick={() => {
+                  setEditCaptionValue(currentCaption);
+                  setIsEditingCaption(false);
+                }}
+                className="px-2.5 py-1 text-xs text-zinc-400 hover:text-white cursor-pointer"
               >
-                {isExpanded ? 'less' : 'more'}
+                Cancel
               </button>
-            )}
+              <button
+                type="button"
+                onClick={handleSaveCaption}
+                disabled={isSavingCaption}
+                className="px-3 py-1 bg-white text-zinc-950 font-bold rounded-lg text-xs hover:bg-zinc-200 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                {isSavingCaption && <Loader2 className="w-3 h-3 animate-spin" />}
+                Save
+              </button>
+            </div>
           </div>
+        ) : (
+          currentCaption && (
+            <div className="text-zinc-200 leading-relaxed break-words">
+              <Link href={`/u/${post.author.username}`} className="font-semibold text-white hover:underline mr-1.5">
+                {post.author.username}
+              </Link>
+              <span>
+                {currentCaption.length > 120 && !isExpanded
+                  ? `${currentCaption.slice(0, 120)}...`
+                  : currentCaption}
+              </span>
+              {currentCaption.length > 120 && (
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-zinc-400 hover:text-white ml-1 font-medium focus:outline-none cursor-pointer"
+                >
+                  {isExpanded ? 'less' : 'more'}
+                </button>
+              )}
+            </div>
+          )
         )}
 
         {/* View Comments Link */}
@@ -323,7 +401,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
           <button
             type="button"
             onClick={() => onOpenComments && onOpenComments(post._id)}
-            className="text-zinc-400 hover:text-zinc-200 block pt-0.5"
+            className="text-zinc-400 hover:text-zinc-200 block pt-0.5 cursor-pointer"
           >
             View all {commentsCount} {commentsCount === 1 ? 'comment' : 'comments'}
           </button>
@@ -351,7 +429,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
             <button
               type="submit"
               disabled={isSubmittingComment}
-              className="text-xs font-semibold text-white hover:text-zinc-300 disabled:opacity-50 transition-colors flex items-center gap-1"
+              className="text-xs font-semibold text-white hover:text-zinc-300 disabled:opacity-50 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
             </button>
@@ -369,4 +447,3 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
     </article>
   );
 }
-

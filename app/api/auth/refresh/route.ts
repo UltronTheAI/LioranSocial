@@ -6,9 +6,19 @@ import {
   setAuthCookies,
   clearAuthCookies,
 } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown';
+    const rateLimit = checkRateLimit(`refresh:${ip}`, 30, 60); // 30 requests per minute per IP
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many refresh attempts. Please slow down.' },
+        { status: 429 }
+      );
+    }
+
     const cookieStore = await cookies();
     const rawRefreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
 

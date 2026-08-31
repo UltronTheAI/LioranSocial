@@ -158,10 +158,14 @@ export function StoryCirclesBar() {
       {/* Story Viewer Modal */}
       {activeAuthorIndex !== null && (
         <StoryViewerModal
+          key={activeAuthorIndex}
           storyGroups={storyGroups}
           initialAuthorIndex={activeAuthorIndex}
           isOpen={activeAuthorIndex !== null}
-          onClose={() => setActiveAuthorIndex(null)}
+          onClose={() => {
+            setActiveAuthorIndex(null);
+            refreshStories();
+          }}
           onStoryViewed={refreshStories}
         />
       )}

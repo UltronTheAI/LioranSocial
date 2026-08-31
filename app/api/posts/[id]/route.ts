@@ -65,6 +65,62 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 });
+    }
+
+    const { id } = await props.params;
+    if (!Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid post ID' }, { status: 400 });
+    }
+
+    const body = await req.json();
+    const caption = typeof body.caption === 'string' ? body.caption.trim().slice(0, 500) : '';
+
+    await connectToDatabase();
+
+    const post = await Post.findById(id);
+    if (!post) {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+
+    if (post.authorId.toString() !== currentUser._id.toString()) {
+      return NextResponse.json(
+        { error: 'You are not authorized to edit this post.' },
+        { status: 403 }
+      );
+    }
+
+    // Extract mentions
+    const rawMentions: string[] = (caption.match(/@([a-zA-Z0-9_]+)/g) || []).map(
+      (m: string) => m.substring(1).toLowerCase()
+    );
+    const mentions: string[] = Array.from(new Set(rawMentions));
+
+    post.caption = caption;
+    post.mentions = mentions;
+    await post.save();
+
+    return NextResponse.json({
+      message: 'Post updated successfully.',
+      post: {
+        _id: post._id.toString(),
+        caption: post.caption,
+        mentions: post.mentions,
+      },
+    });
+  } catch (error) {
+    console.error('Edit post error:', error);
+    return NextResponse.json({ error: 'Failed to update post.' }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   req: NextRequest,
   props: { params: Promise<{ id: string }> }
@@ -121,4 +177,3 @@ export async function DELETE(
     );
   }
 }
-

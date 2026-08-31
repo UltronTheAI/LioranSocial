@@ -2,7 +2,15 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { X, ChevronLeft, ChevronRight, Send, Check } from 'lucide-react';
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Send,
+  Check,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { IStoryMedia } from '@/models/Story';
 
@@ -39,7 +47,7 @@ export interface StoryViewerModalProps {
 const EMOJI_REACTIONS = ['❤️', '🔥', '👏', '😂', '😮', '😢'];
 
 export function StoryViewerModal({
-  storyGroups,
+  storyGroups: initialGroups,
   initialAuthorIndex,
   isOpen,
   onClose,
@@ -47,6 +55,7 @@ export function StoryViewerModal({
 }: StoryViewerModalProps) {
   const { user: currentUser } = useAuth();
 
+  const [storyGroups, setStoryGroups] = useState<StoryGroupData[]>(initialGroups);
   const [authorIndex, setAuthorIndex] = useState(initialAuthorIndex);
   const [storyIndex, setStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -54,6 +63,7 @@ export function StoryViewerModal({
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [sentToast, setSentToast] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -109,7 +119,7 @@ export function StoryViewerModal({
 
   // Handle timer & progress for current story
   useEffect(() => {
-    if (!isOpen || !currentStory || isPaused) return;
+    if (!isOpen || !currentStory || isPaused || isDeleting) return;
 
     // Record view
     const viewTimer = setTimeout(() => {
@@ -136,7 +146,47 @@ export function StoryViewerModal({
         clearInterval(progressTimerRef.current);
       }
     };
-  }, [isOpen, currentStory, isPaused, handleNext, recordStoryView]);
+  }, [isOpen, currentStory, isPaused, isDeleting, handleNext, recordStoryView]);
+
+  // Delete current story
+  const handleDeleteStory = async () => {
+    if (!currentStory || isDeleting) return;
+    if (!confirm('Are you sure you want to delete this story?')) return;
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/stories/${currentStory._id}`, { method: 'DELETE' });
+      if (res.ok) {
+        const remainingInGroup = currentGroup.stories.filter((s) => s._id !== currentStory._id);
+
+        if (remainingInGroup.length > 0) {
+          setStoryGroups((prev) =>
+            prev.map((g, idx) =>
+              idx === authorIndex ? { ...g, stories: remainingInGroup } : g
+            )
+          );
+          if (storyIndex >= remainingInGroup.length) {
+            setStoryIndex(Math.max(0, remainingInGroup.length - 1));
+          }
+          setProgress(0);
+        } else {
+          const remainingGroups = storyGroups.filter((_, idx) => idx !== authorIndex);
+          if (remainingGroups.length === 0) {
+            onClose();
+          } else {
+            setStoryGroups(remainingGroups);
+            setAuthorIndex(Math.min(authorIndex, remainingGroups.length - 1));
+            setStoryIndex(0);
+            setProgress(0);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Delete story error:', e);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Send quick reaction
   const handleSendReaction = async (emoji: string) => {
@@ -150,7 +200,7 @@ export function StoryViewerModal({
         body: JSON.stringify({ emoji }),
       });
       setSentToast(true);
-      setTimeout(() => setSentToast(false), 1500);
+      setTimeout(() => setSentToast(false), 2000);
     } catch (e) {
       console.error('Send reaction error:', e);
     } finally {
@@ -161,9 +211,9 @@ export function StoryViewerModal({
   // Send text reply
   const handleSendTextReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim() || !currentStory || isSubmittingReply) return;
-
+    if (!currentStory || !replyText.trim() || isSubmittingReply) return;
     setIsSubmittingReply(true);
+
     try {
       await fetch(`/api/stories/${currentStory._id}/reply`, {
         method: 'POST',
@@ -172,9 +222,9 @@ export function StoryViewerModal({
       });
       setReplyText('');
       setSentToast(true);
-      setTimeout(() => setSentToast(false), 1500);
+      setTimeout(() => setSentToast(false), 2000);
     } catch (e) {
-      console.error('Send reply error:', e);
+      console.error('Send text reply error:', e);
     } finally {
       setIsSubmittingReply(false);
     }
@@ -182,18 +232,20 @@ export function StoryViewerModal({
 
   if (!isOpen || !currentGroup || !currentStory) return null;
 
+  const isOwner = currentUser && currentGroup.author._id === currentUser._id;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-200 select-none">
-      {/* Close button */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200 select-none">
+      {/* Top Close Button (Desktop) */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 z-40 p-2 rounded-full bg-black/60 hover:bg-black text-white/80 hover:text-white transition-colors"
+        className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black transition-colors"
       >
         <X className="w-6 h-6" />
       </button>
 
       {/* Nav arrow Left (Desktop) */}
-      {authorIndex > 0 && (
+      {!(authorIndex === 0 && storyIndex === 0) && (
         <button
           onClick={handlePrev}
           className="hidden md:flex absolute left-8 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/60 text-white items-center justify-center hover:bg-black transition-colors"
@@ -203,7 +255,7 @@ export function StoryViewerModal({
       )}
 
       {/* Nav arrow Right (Desktop) */}
-      {authorIndex < storyGroups.length - 1 && (
+      {!(authorIndex === storyGroups.length - 1 && storyIndex === currentGroup.stories.length - 1) && (
         <button
           onClick={handleNext}
           className="hidden md:flex absolute right-8 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/60 text-white items-center justify-center hover:bg-black transition-colors"
@@ -214,7 +266,7 @@ export function StoryViewerModal({
 
       {/* Story Player Container */}
       <div
-        className="relative w-full max-w-sm sm:max-w-md h-[90vh] sm:h-[88vh] bg-black rounded-2xl overflow-hidden shadow-2xl border border-[#27272a]/60 flex flex-col justify-between"
+        className="relative w-full sm:max-w-md h-full sm:h-[88vh] bg-black rounded-none sm:rounded-2xl overflow-hidden shadow-2xl border-0 sm:border sm:border-[#27272a]/60 flex flex-col justify-between"
         onMouseDown={() => setIsPaused(true)}
         onMouseUp={() => setIsPaused(false)}
         onTouchStart={() => setIsPaused(true)}
@@ -265,9 +317,38 @@ export function StoryViewerModal({
                 <p className="text-xs font-bold text-white group-hover:underline">
                   {currentGroup.author.username}
                 </p>
-                <p className="text-[10px] text-zinc-400">24h Story</p>
+                <p className="text-[10px] text-zinc-400">
+                  {currentStory.viewsCount > 0 ? `${currentStory.viewsCount} views` : '24h Story'}
+                </p>
               </div>
             </Link>
+
+            <div className="flex items-center gap-2">
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteStory();
+                  }}
+                  disabled={isDeleting}
+                  className="p-1.5 rounded-full bg-black/50 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors cursor-pointer"
+                  title="Delete this story"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-1.5 text-white/80 hover:text-white sm:hidden"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -314,65 +395,63 @@ export function StoryViewerModal({
         {/* Bottom: Quick Emoji Reactions & Reply Input */}
         {/* ================================================================= */}
         <div className="relative z-30 p-3.5 space-y-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
-          {/* Reaction confirmation toast */}
           {sentToast && (
             <div className="flex items-center justify-center gap-1.5 py-1 text-xs font-semibold text-emerald-400 animate-in fade-in zoom-in-95">
               <Check className="w-4 h-4" /> Reaction Sent
             </div>
           )}
 
-          {/* Quick Reactions Bar */}
-          {currentUser && currentGroup.author._id !== currentUser._id && (
-            <div className="flex items-center justify-around py-1">
-              {EMOJI_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSendReaction(emoji);
-                  }}
-                  className="text-xl sm:text-2xl hover:scale-125 active:scale-95 transition-transform"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
+          {!isOwner && currentUser && (
+            <>
+              {/* Quick Reactions Bar */}
+              <div className="flex items-center justify-around py-1">
+                {EMOJI_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSendReaction(emoji);
+                    }}
+                    className="text-xl sm:text-2xl hover:scale-125 active:scale-95 transition-transform"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
-          {/* Text Reply Input */}
-          {currentUser && currentGroup.author._id !== currentUser._id && (
-            <form
-              onSubmit={(e) => {
-                e.stopPropagation();
-                handleSendTextReply(e);
-              }}
-              className="flex items-center gap-2"
-            >
-              <input
-                type="text"
-                placeholder={`Reply to ${currentGroup.author.username}...`}
-                value={replyText}
-                onFocus={() => setIsPaused(true)}
-                onBlur={() => setIsPaused(false)}
-                onChange={(e) => setReplyText(e.target.value)}
-                className="flex-1 rounded-full bg-white/20 backdrop-blur-md px-4 py-2 text-xs text-white placeholder:text-white/60 border border-white/20 focus:outline-none focus:border-white transition-colors"
-                maxLength={300}
-              />
-              {replyText.trim().length > 0 && (
-                <button
-                  type="submit"
-                  disabled={isSubmittingReply}
-                  className="p-2 rounded-full bg-white text-zinc-950 font-bold hover:bg-zinc-200 transition-colors"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </form>
+              {/* Text Reply Input */}
+              <form
+                onSubmit={(e) => {
+                  e.stopPropagation();
+                  handleSendTextReply(e);
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  placeholder={`Reply to ${currentGroup.author.username}...`}
+                  value={replyText}
+                  onFocus={() => setIsPaused(true)}
+                  onBlur={() => setIsPaused(false)}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  className="flex-1 rounded-full bg-white/20 backdrop-blur-md px-4 py-2 text-xs text-white placeholder:text-white/60 border border-white/20 focus:outline-none focus:border-white transition-colors"
+                  maxLength={300}
+                />
+                {replyText.trim().length > 0 && (
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReply}
+                    className="p-2 rounded-full bg-white text-zinc-950 font-bold hover:bg-zinc-200 transition-colors cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </form>
+            </>
           )}
         </div>
       </div>
     </div>
   );
 }
-

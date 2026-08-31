@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { SafeUser } from '@/types/user';
 
 interface AuthContextType {
@@ -18,40 +18,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SafeUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const router = useRouter();
-  const pathname = usePathname();
+
+  // In-flight single-flight promise deduplication
+  const fetchPromiseRef = useRef<Promise<SafeUser | null>>(null);
 
   const fetchCurrentUser = useCallback(async (): Promise<SafeUser | null> => {
-    try {
-      const res = await fetch('/api/auth/me', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        return data.user;
-      }
-
-      // If access token is expired, try refresh token endpoint explicitly
-      const refreshRes = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (refreshRes.ok) {
-        const refreshData = await refreshRes.json();
-        return refreshData.user;
-      }
-
-      return null;
-    } catch {
-      return null;
+    // If a request is already in-flight, return the active promise
+    if (fetchPromiseRef.current) {
+      return fetchPromiseRef.current;
     }
+
+    const promise = (async () => {
+      try {
+        const res = await fetch('/api/auth/me', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          return data.user;
+        }
+
+        // If access token is expired or unauthorized, attempt refresh token endpoint once
+        if (res.status === 401) {
+          const refreshRes = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          if (refreshRes.ok) {
+            const refreshData = await refreshRes.json();
+            return refreshData.user;
+          }
+        }
+
+        return null;
+      } catch {
+        return null;
+      } finally {
+        fetchPromiseRef.current = null;
+      }
+    })();
+
+    fetchPromiseRef.current = promise;
+    return promise;
   }, []);
 
   const refreshUser = useCallback(async (): Promise<SafeUser | null> => {
     setLoading(true);
+    fetchPromiseRef.current = null; // Clear any cached promise
     const currentUser = await fetchCurrentUser();
     setUser(currentUser);
     setLoading(false);
@@ -67,23 +84,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Logout error:', e);
     } finally {
       setUser(null);
+      fetchPromiseRef.current = null;
       router.push('/login');
     }
   }, [router]);
 
+  // Resolve session on mount with single-flight promise deduplication
   useEffect(() => {
-    let isMounted = true;
     fetchCurrentUser().then((currentUser) => {
-      if (isMounted) {
-        setUser(currentUser);
-        setLoading(false);
-      }
+      setUser(currentUser);
+      setLoading(false);
     });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [fetchCurrentUser, pathname]);
+  }, [fetchCurrentUser]);
 
   return (
     <AuthContext.Provider value={{ user, loading, setUser, refreshUser, logout }}>
@@ -99,4 +111,3 @@ export function useAuth(): AuthContextType {
   }
   return context;
 }
-

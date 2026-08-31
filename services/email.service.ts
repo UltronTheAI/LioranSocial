@@ -1,24 +1,46 @@
 import nodemailer from 'nodemailer';
 
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const EMAIL_FROM = process.env.EMAIL_FROM || 'LioranSocial <noreply@lioransocial.app>';
-
 let transporter: nodemailer.Transporter | null = null;
 
-function getTransporter(): nodemailer.Transporter | null {
-  if (transporter) return transporter;
+function cleanEnv(val?: string) {
+  if (!val) return undefined;
+  return val.replace(/^["']|["']$/g, '').trim();
+}
 
-  if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+function getEmailFrom(): string {
+  const fromName = cleanEnv(process.env.SMTP_FROM_NAME);
+  const fromEmail = cleanEnv(process.env.SMTP_FROM_EMAIL);
+  if (fromEmail) {
+    return fromName ? `${fromName} <${fromEmail}>` : fromEmail;
+  }
+  return cleanEnv(process.env.EMAIL_FROM) || 'LioranSocial <noreply@lioransocial.app>';
+}
+
+function getTransporter(): nodemailer.Transporter | null {
+  const host = cleanEnv(process.env.SMTP_HOST);
+  const portStr = cleanEnv(process.env.SMTP_PORT);
+  const port = portStr ? parseInt(portStr, 10) : 587;
+  const user = cleanEnv(process.env.SMTP_USER);
+  const pass = cleanEnv(process.env.SMTP_PASS);
+
+  // In standard SMTP:
+  // Port 465: Direct implicit TLS (secure: true)
+  // Port 587 / 2525: Explicit STARTTLS (secure: false, requireTLS: true)
+  // Attempting secure: true on port 587 causes "wrong version number" SSL handshake failure.
+  const isDirectSsl = port === 465;
+
+  if (host && user && pass) {
     transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_PORT === 465,
+      host,
+      port,
+      secure: isDirectSsl,
+      requireTLS: !isDirectSsl, // Enforce TLS upgrade via STARTTLS on port 587
       auth: {
-        user: SMTP_USER,
-        pass: SMTP_PASS,
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
     });
     return transporter;
@@ -81,7 +103,7 @@ export async function sendVerificationEmail(to: string, otp: string): Promise<bo
 
   try {
     await mailer.sendMail({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to,
       subject: `${otp} is your LioranSocial verification code`,
       text,
@@ -150,7 +172,7 @@ export async function sendPasswordResetEmail(to: string, otp: string): Promise<b
 
   try {
     await mailer.sendMail({
-      from: EMAIL_FROM,
+      from: getEmailFrom(),
       to,
       subject: `${otp} is your password reset code`,
       text,

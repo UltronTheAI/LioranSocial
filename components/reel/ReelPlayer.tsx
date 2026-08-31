@@ -11,6 +11,11 @@ import {
   VolumeX,
   Play,
   Eye,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
@@ -52,10 +57,12 @@ export function ReelPlayer({
   isMuted,
   onToggleMute,
   onOpenComments,
+  onReelDeleted,
 }: ReelPlayerProps) {
   const { user: currentUser } = useAuth();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  const [currentCaption, setCurrentCaption] = useState(reel.caption);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLiked, setIsLiked] = useState(reel.isLiked);
   const [likesCount, setLikesCount] = useState(reel.likesCount);
@@ -64,6 +71,15 @@ export function ReelPlayer({
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+
+  // Edit Caption state
+  const [isEditingCaption, setIsEditingCaption] = useState(false);
+  const [editCaptionValue, setEditCaptionValue] = useState(reel.caption);
+  const [isSavingCaption, setIsSavingCaption] = useState(false);
+
+  const isAuthor = currentUser && currentUser._id.toString() === reel.author._id.toString();
 
   // View count threshold tracking (3s continuous playback)
   const viewCountedRef = useRef(false);
@@ -89,7 +105,6 @@ export function ReelPlayer({
       video
         .play()
         .then(() => {
-          // Start 3-second watch timer for view counting
           if (!viewCountedRef.current) {
             watchTimerRef.current = setTimeout(recordView, 3000);
           }
@@ -186,8 +201,51 @@ export function ReelPlayer({
     }
   };
 
+  // Copy Link
+  const handleCopyLink = () => {
+    const reelUrl = `${window.location.origin}/reels#${reel._id}`;
+    navigator.clipboard.writeText(reelUrl);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+    setIsMenuOpen(false);
+  };
+
+  // Save Edited Caption
+  const handleSaveCaption = async () => {
+    setIsSavingCaption(true);
+    try {
+      const res = await fetch(`/api/reels/${reel._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: editCaptionValue }),
+      });
+      if (res.ok) {
+        setCurrentCaption(editCaptionValue);
+        setIsEditingCaption(false);
+      }
+    } catch (e) {
+      console.error('Update caption failed:', e);
+    } finally {
+      setIsSavingCaption(false);
+      setIsMenuOpen(false);
+    }
+  };
+
+  // Delete Reel
+  const handleDeleteReel = async () => {
+    if (!confirm('Are you sure you want to delete this reel?')) return;
+    try {
+      const res = await fetch(`/api/reels/${reel._id}`, { method: 'DELETE' });
+      if (res.ok && onReelDeleted) {
+        onReelDeleted(reel._id);
+      }
+    } catch (e) {
+      console.error('Delete reel failed:', e);
+    }
+  };
+
   return (
-    <div className="relative w-full max-w-sm sm:max-w-md h-[82vh] sm:h-[86vh] mx-auto bg-black rounded-2xl overflow-hidden shadow-2xl border border-[#27272a]/60 select-none flex items-center justify-center snap-center group">
+    <div className="relative w-full max-w-sm sm:max-w-md h-[82vh] sm:h-[86vh] mx-auto bg-black rounded-none sm:rounded-2xl overflow-hidden shadow-2xl border-0 sm:border sm:border-[#27272a]/60 select-none flex items-center justify-center snap-center group">
       {/* Video Element */}
       <video
         ref={videoRef}
@@ -226,7 +284,7 @@ export function ReelPlayer({
       {/* Audio Mute/Unmute Overlay Button (Top-Right) */}
       <button
         onClick={onToggleMute}
-        className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/80 transition-colors shadow-lg"
+        className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/50 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/80 transition-colors shadow-lg cursor-pointer"
         aria-label={isMuted ? 'Unmute' : 'Mute'}
       >
         {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -239,7 +297,7 @@ export function ReelPlayer({
       </div>
 
       {/* Right Interaction Sidebar */}
-      <div className="absolute right-3 bottom-14 z-20 flex flex-col items-center gap-5 text-white">
+      <div className="absolute right-3 bottom-14 z-20 flex flex-col items-center gap-4 text-white">
         {/* Author Avatar with Link */}
         <Link
           href={`/u/${reel.author.username}`}
@@ -254,10 +312,10 @@ export function ReelPlayer({
         </Link>
 
         {/* Like Button */}
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-0.5">
           <button
             onClick={handleToggleLike}
-            className={`p-2 rounded-full bg-black/40 backdrop-blur-md transition-transform active:scale-125 focus:outline-none ${
+            className={`p-2 rounded-full bg-black/40 backdrop-blur-md transition-transform active:scale-125 focus:outline-none cursor-pointer ${
               isLiked ? 'text-rose-500 fill-rose-500' : 'text-white hover:text-zinc-200'
             }`}
             aria-label={isLiked ? 'Unlike' : 'Like'}
@@ -268,10 +326,10 @@ export function ReelPlayer({
         </div>
 
         {/* Comment Button */}
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-0.5">
           <button
             onClick={() => onOpenComments(reel._id)}
-            className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:text-zinc-200 transition-colors focus:outline-none"
+            className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
             aria-label="View comments"
           >
             <MessageCircle className="w-6 h-6" />
@@ -280,10 +338,10 @@ export function ReelPlayer({
         </div>
 
         {/* Save / Bookmark Button */}
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-0.5">
           <button
             onClick={handleToggleSave}
-            className={`p-2 rounded-full bg-black/40 backdrop-blur-md transition-colors focus:outline-none ${
+            className={`p-2 rounded-full bg-black/40 backdrop-blur-md transition-colors focus:outline-none cursor-pointer ${
               isSaved ? 'text-amber-400 fill-amber-400' : 'text-white hover:text-zinc-200'
             }`}
             aria-label={isSaved ? 'Remove Bookmark' : 'Bookmark'}
@@ -293,14 +351,58 @@ export function ReelPlayer({
         </div>
 
         {/* Share Button */}
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-0.5">
           <button
             onClick={() => setIsShareModalOpen(true)}
-            className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:text-zinc-200 transition-colors focus:outline-none"
+            className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
             title="Share reel"
           >
             <Share2 className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* More Options / 3 dots */}
+        <div className="relative">
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:text-zinc-200 transition-colors focus:outline-none cursor-pointer"
+            title="Options"
+          >
+            <MoreVertical className="w-5 h-5" />
+          </button>
+
+          {isMenuOpen && (
+            <div className="absolute right-0 bottom-full mb-2 w-36 bg-[#18181b] border border-[#27272a] rounded-xl shadow-2xl py-1 z-30 animate-in fade-in zoom-in-95">
+              <button
+                onClick={handleCopyLink}
+                className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2 cursor-pointer"
+              >
+                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                {isCopied ? 'Copied' : 'Copy link'}
+              </button>
+              {isAuthor && (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsEditingCaption(true);
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-blue-400" />
+                    Edit caption
+                  </button>
+                  <button
+                    onClick={handleDeleteReel}
+                    className="w-full text-left px-3 py-2 text-xs text-rose-400 hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete reel
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -312,23 +414,56 @@ export function ReelPlayer({
           </Link>
         </div>
 
-        {reel.caption && (
-          <div className="pointer-events-auto text-xs text-zinc-100 leading-snug">
-            <span>
-              {reel.caption.length > 80 && !isCaptionExpanded
-                ? `${reel.caption.slice(0, 80)}...`
-                : reel.caption}
-            </span>
-            {reel.caption.length > 80 && (
+        {isEditingCaption ? (
+          <div className="pointer-events-auto space-y-2 bg-[#121215]/90 p-2.5 rounded-xl border border-zinc-700">
+            <textarea
+              value={editCaptionValue}
+              onChange={(e) => setEditCaptionValue(e.target.value)}
+              className="w-full bg-transparent text-xs text-white placeholder:text-zinc-500 focus:outline-none"
+              rows={2}
+              maxLength={500}
+            />
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
-                className="text-zinc-300 hover:text-white font-semibold ml-1 focus:outline-none"
+                onClick={() => {
+                  setEditCaptionValue(currentCaption);
+                  setIsEditingCaption(false);
+                }}
+                className="px-2 py-0.5 text-xs text-zinc-400 hover:text-white cursor-pointer"
               >
-                {isCaptionExpanded ? 'less' : 'more'}
+                Cancel
               </button>
-            )}
+              <button
+                type="button"
+                onClick={handleSaveCaption}
+                disabled={isSavingCaption}
+                className="px-2.5 py-0.5 bg-white text-zinc-950 font-bold rounded-lg text-xs hover:bg-zinc-200 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                {isSavingCaption && <Loader2 className="w-3 h-3 animate-spin" />}
+                Save
+              </button>
+            </div>
           </div>
+        ) : (
+          currentCaption && (
+            <div className="pointer-events-auto text-xs text-zinc-100 leading-snug break-words">
+              <span>
+                {currentCaption.length > 80 && !isCaptionExpanded
+                  ? `${currentCaption.slice(0, 80)}...`
+                  : currentCaption}
+              </span>
+              {currentCaption.length > 80 && (
+                <button
+                  type="button"
+                  onClick={() => setIsCaptionExpanded(!isCaptionExpanded)}
+                  className="text-zinc-300 hover:text-white font-semibold ml-1 focus:outline-none cursor-pointer"
+                >
+                  {isCaptionExpanded ? 'less' : 'more'}
+                </button>
+              )}
+            </div>
+          )
         )}
       </div>
 

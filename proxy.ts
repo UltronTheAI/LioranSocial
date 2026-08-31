@@ -5,7 +5,7 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/constants';
 const AUTH_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/verify'];
 const PUBLIC_PREFIXES = ['/api/auth', '/_next', '/favicon.ico', '/public'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Ignore API, Next.js internal and static routes
@@ -48,3 +48,4 @@ export const config = {
     '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
   ],
 };
+

@@ -25,9 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark h-full">
+    <html lang="en" className="dark h-full" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-full flex flex-col bg-[#09090b] text-[#f4f4f5] antialiased`}
+        suppressHydrationWarning
       >
         <AuthProvider>
           <SocketProvider>{children}</SocketProvider>

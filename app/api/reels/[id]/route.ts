@@ -66,6 +66,62 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 });
+    }
+
+    const { id } = await props.params;
+    if (!Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid reel ID' }, { status: 400 });
+    }
+
+    const body = await req.json();
+    const caption = typeof body.caption === 'string' ? body.caption.trim().slice(0, 500) : '';
+
+    await connectToDatabase();
+
+    const reel = await Reel.findById(id);
+    if (!reel) {
+      return NextResponse.json({ error: 'Reel not found' }, { status: 404 });
+    }
+
+    if (reel.authorId.toString() !== currentUser._id.toString()) {
+      return NextResponse.json(
+        { error: 'You are not authorized to edit this reel.' },
+        { status: 403 }
+      );
+    }
+
+    // Extract mentions
+    const rawMentions: string[] = (caption.match(/@([a-zA-Z0-9_]+)/g) || []).map(
+      (m: string) => m.substring(1).toLowerCase()
+    );
+    const mentions: string[] = Array.from(new Set(rawMentions));
+
+    reel.caption = caption;
+    reel.mentions = mentions;
+    await reel.save();
+
+    return NextResponse.json({
+      message: 'Reel updated successfully.',
+      reel: {
+        _id: reel._id.toString(),
+        caption: reel.caption,
+        mentions: reel.mentions,
+      },
+    });
+  } catch (error) {
+    console.error('Edit reel error:', error);
+    return NextResponse.json({ error: 'Failed to update reel.' }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   req: NextRequest,
   props: { params: Promise<{ id: string }> }
@@ -116,4 +172,3 @@ export async function DELETE(
     );
   }
 }
-

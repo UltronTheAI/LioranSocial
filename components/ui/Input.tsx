@@ -35,6 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             type={inputType}
             ref={ref}
             disabled={disabled}
+            suppressHydrationWarning
             className={cn(
               'w-full rounded-xl bg-[#121215] px-3.5 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 border border-[#27272a] transition-all duration-150',
               'focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500',
