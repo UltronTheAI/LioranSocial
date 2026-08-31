@@ -10,14 +10,26 @@ import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { CreatePostModal } from '@/components/post/CreatePostModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
+import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
+
+const FEED_POSTS_CACHE_KEY = 'lioran_cached_feed_posts';
 
 export default function HomePage() {
   const { user } = useAuth();
 
-  const [posts, setPosts] = useState<PostCardData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [posts, setPosts] = useState<PostCardData[]>(() => {
+    const cached = getStorageCache<{ posts: PostCardData[] }>(FEED_POSTS_CACHE_KEY);
+    return cached?.posts || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getStorageCache<{ posts: PostCardData[] }>(FEED_POSTS_CACHE_KEY);
+    return !(cached?.posts && cached.posts.length > 0);
+  });
   const [loadingMore, setLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(() => {
+    const cached = getStorageCache<{ nextCursor: string | null }>(FEED_POSTS_CACHE_KEY);
+    return cached?.nextCursor || null;
+  });
   const [hasMore, setHasMore] = useState(true);
 
   // Selected post for detail/comments modal
@@ -27,40 +39,37 @@ export default function HomePage() {
   // Sentinel ref for IntersectionObserver
   const observerTarget = useRef<HTMLDivElement | null>(null);
 
-  // Initial fetch
-  const fetchInitialFeedData = useCallback(async () => {
-    try {
-      const res = await fetch('/api/posts?limit=10', { cache: 'no-store' });
-      const data = await res.json();
-      if (res.ok) {
-        return {
-          posts: data.posts || [],
-          nextCursor: data.nextCursor || null,
-          hasMore: Boolean(data.hasMore),
-        };
-      }
-      return { posts: [], nextCursor: null, hasMore: false };
-    } catch (e) {
-      console.error('Fetch feed error:', e);
-      return { posts: [], nextCursor: null, hasMore: false };
-    }
-  }, []);
-
+  // Fetch fresh feed in background
   useEffect(() => {
     let isMounted = true;
-    fetchInitialFeedData().then((result) => {
-      if (isMounted) {
-        setPosts(result.posts);
-        setNextCursor(result.nextCursor);
-        setHasMore(result.hasMore);
+
+    fetch('/api/posts?limit=10', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.posts) {
+          const fetchedPosts = data.posts || [];
+          setPosts(fetchedPosts);
+          setNextCursor(data.nextCursor || null);
+          setHasMore(Boolean(data.hasMore));
+
+          setStorageCache(FEED_POSTS_CACHE_KEY, {
+            posts: fetchedPosts.slice(0, 20),
+            nextCursor: data.nextCursor || null,
+            hasMore: Boolean(data.hasMore),
+          });
+        }
         setLoading(false);
-      }
-    });
+      })
+      .catch((e) => {
+        console.error('Fetch feed error:', e);
+        if (isMounted) setLoading(false);
+      });
 
     return () => {
       isMounted = false;
     };
-  }, [fetchInitialFeedData]);
+  }, []);
 
   // Load more posts using cursor
   const loadMorePosts = useCallback(async () => {
@@ -76,7 +85,13 @@ export default function HomePage() {
         setPosts((prev) => {
           const existingIds = new Set(prev.map((p) => p._id));
           const newUniquePosts = data.posts.filter((p: PostCardData) => !existingIds.has(p._id));
-          return [...prev, ...newUniquePosts];
+          const combined = [...prev, ...newUniquePosts];
+          setStorageCache(FEED_POSTS_CACHE_KEY, {
+            posts: combined.slice(0, 20),
+            nextCursor: data.nextCursor || null,
+            hasMore: Boolean(data.hasMore),
+          });
+          return combined;
         });
 
         setNextCursor(data.nextCursor);
@@ -113,21 +128,37 @@ export default function HomePage() {
   }, [hasMore, loading, loadingMore, loadMorePosts]);
 
   const handlePostDeleted = (deletedPostId: string) => {
-    setPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
+    setPosts((prev) => {
+      const updated = prev.filter((p) => p._id !== deletedPostId);
+      setStorageCache(FEED_POSTS_CACHE_KEY, {
+        posts: updated.slice(0, 20),
+        nextCursor,
+        hasMore,
+      });
+      return updated;
+    });
   };
 
   const handlePostCreated = (newPost: PostCardData) => {
-    setPosts((prev) => [newPost, ...prev]);
+    setPosts((prev) => {
+      const updated = [newPost, ...prev];
+      setStorageCache(FEED_POSTS_CACHE_KEY, {
+        posts: updated.slice(0, 20),
+        nextCursor,
+        hasMore,
+      });
+      return updated;
+    });
   };
 
   return (
     <AppShell>
-      <div className="max-w-xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-6 pb-24 md:pb-8">
+      <div className="max-w-xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-6 pb-24 md:pb-8 select-none">
         {/* Story Circles Bar */}
         <StoryCirclesBar />
 
         {/* Loading Skeletons */}
-        {loading && (
+        {loading && posts.length === 0 && (
           <div className="space-y-6">
             {[1, 2].map((i) => (
               <div
@@ -153,7 +184,7 @@ export default function HomePage() {
 
         {/* Empty Feed State */}
         {!loading && posts.length === 0 && (
-          <div className="bg-[#121215] border border-[#27272a] rounded-2xl p-8 text-center space-y-4">
+          <div className="bg-[#121215] border border-[#27272a] rounded-2xl p-8 text-center space-y-4 shadow-xl">
             <div className="w-12 h-12 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mx-auto text-white">
               <Sparkles className="w-6 h-6 text-amber-300" />
             </div>
@@ -185,7 +216,7 @@ export default function HomePage() {
         )}
 
         {/* Posts List */}
-        {!loading && posts.length > 0 && (
+        {posts.length > 0 && (
           <div className="space-y-6">
             {posts.map((post) => (
               <PostCard

@@ -27,6 +27,7 @@ import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import { FollowersListModal } from '@/components/profile/FollowersListModal';
 import { useAuth } from '@/context/AuthContext';
 import { SafeUser } from '@/types/user';
+import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
 
 interface ProfileData {
   user: SafeUser;
@@ -45,19 +46,28 @@ export default function UserProfilePage({
   const { user: currentUser } = useAuth();
   const router = useRouter();
 
-  const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<ProfileData | null>(() => {
+    return getStorageCache<ProfileData>(`lioran_cached_profile_${username}`) || null;
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getStorageCache<ProfileData>(`lioran_cached_profile_${username}`);
+    return !(cached && cached.user);
+  });
   const [notFound, setNotFound] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
 
-  // Tabs & Media State
+  // Tabs & Media State (Initialized with lazy cache)
   const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'saved'>('posts');
   const [savedSubTab, setSavedSubTab] = useState<'posts' | 'reels'>('posts');
-  const [userPosts, setUserPosts] = useState<PostCardData[]>([]);
-  const [userReels, setUserReels] = useState<ReelData[]>([]);
+  const [userPosts, setUserPosts] = useState<PostCardData[]>(() => {
+    return getStorageCache<PostCardData[]>(`lioran_cached_profile_posts_${username}`) || [];
+  });
+  const [userReels, setUserReels] = useState<ReelData[]>(() => {
+    return getStorageCache<ReelData[]>(`lioran_cached_profile_reels_${username}`) || [];
+  });
   const [savedPosts, setSavedPosts] = useState<PostCardData[]>([]);
   const [savedReels, setSavedReels] = useState<ReelData[]>([]);
-  const [mediaLoading, setMediaLoading] = useState(true);
+  const [mediaLoading, setMediaLoading] = useState(false);
 
   // Modals state
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -74,6 +84,7 @@ export default function UserProfilePage({
 
       const data = await res.json();
       if (res.ok && data.user) {
+        setStorageCache(`lioran_cached_profile_${username}`, data);
         return { notFound: false, profile: data };
       }
       return { notFound: true, profile: null };
@@ -87,8 +98,10 @@ export default function UserProfilePage({
     try {
       const res = await fetch(`/api/users/${encodeURIComponent(username)}/posts?limit=30`, { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok) {
-        return data.posts || [];
+      if (res.ok && data.posts) {
+        const posts = data.posts || [];
+        setStorageCache(`lioran_cached_profile_posts_${username}`, posts.slice(0, 20));
+        return posts;
       }
       return [];
     } catch (e) {
@@ -102,8 +115,10 @@ export default function UserProfilePage({
     try {
       const res = await fetch(`/api/users/${encodeURIComponent(username)}/reels?limit=30`, { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok) {
-        return data.reels || [];
+      if (res.ok && data.reels) {
+        const reels = data.reels || [];
+        setStorageCache(`lioran_cached_profile_reels_${username}`, reels.slice(0, 20));
+        return reels;
       }
       return [];
     } catch (e) {
@@ -127,7 +142,7 @@ export default function UserProfilePage({
     }
   }, [username, profile?.isSelf]);
 
-  // When username changes, fetch profile data
+  // When username changes, fetch fresh profile data in background
   useEffect(() => {
     let isMounted = true;
 
@@ -242,6 +257,10 @@ export default function UserProfilePage({
         ...profile,
         user: updatedUser,
       });
+      setStorageCache(`lioran_cached_profile_${username}`, {
+        ...profile,
+        user: updatedUser,
+      });
     }
   };
 
@@ -249,17 +268,19 @@ export default function UserProfilePage({
     setUserPosts((prev) => prev.filter((p) => p._id !== postId));
     setSavedPosts((prev) => prev.filter((p) => p._id !== postId));
     if (profile) {
-      setProfile({
+      const updatedProfile = {
         ...profile,
         user: {
           ...profile.user,
           postsCount: Math.max(0, profile.user.postsCount - 1),
         },
-      });
+      };
+      setProfile(updatedProfile);
+      setStorageCache(`lioran_cached_profile_${username}`, updatedProfile);
     }
   };
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <AppShell>
         <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 animate-pulse">
@@ -511,7 +532,7 @@ export default function UserProfilePage({
           )}
 
           {/* Media Grid Container */}
-          {mediaLoading ? (
+          {mediaLoading && userPosts.length === 0 && userReels.length === 0 ? (
             <div className="py-16 text-center text-zinc-500">
               <Loader2 className="w-6 h-6 animate-spin mx-auto" />
             </div>

@@ -2,7 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Search as SearchIcon, Users, Grid, UserPlus, UserCheck, Loader2, Play } from 'lucide-react';
+import {
+  Search as SearchIcon,
+  Grid,
+  UserPlus,
+  UserCheck,
+  Loader2,
+  Play,
+  Sparkles,
+  Clapperboard,
+} from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +20,7 @@ import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { PostCardData } from '@/components/post/PostCard';
 import { ReelData } from '@/components/reel/ReelPlayer';
 import { useAuth } from '@/context/AuthContext';
+import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
 
 interface SearchUser {
   _id: string;
@@ -21,6 +31,8 @@ interface SearchUser {
   isFollowing?: boolean;
 }
 
+const SEARCH_CACHE_KEY = 'lioran_cached_search_discovery';
+
 export default function SearchPage() {
   const { user: currentUser } = useAuth();
 
@@ -30,21 +42,71 @@ export default function SearchPage() {
   const [posts, setPosts] = useState<PostCardData[]>([]);
   const [reels, setReels] = useState<ReelData[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Discovery / Default fallback data (cached with lazy initializer)
+  const [discoveryUsers, setDiscoveryUsers] = useState<SearchUser[]>(() => {
+    const cached = getStorageCache<{ users: SearchUser[] }>(SEARCH_CACHE_KEY);
+    return cached?.users || [];
+  });
+  const [discoveryPosts, setDiscoveryPosts] = useState<PostCardData[]>(() => {
+    const cached = getStorageCache<{ posts: PostCardData[] }>(SEARCH_CACHE_KEY);
+    return cached?.posts || [];
+  });
+  const [discoveryReels, setDiscoveryReels] = useState<ReelData[]>(() => {
+    const cached = getStorageCache<{ reels: ReelData[] }>(SEARCH_CACHE_KEY);
+    return cached?.reels || [];
+  });
+  const [loadingDiscovery, setLoadingDiscovery] = useState(() => {
+    const cached = getStorageCache<{ users: SearchUser[] }>(SEARCH_CACHE_KEY);
+    return !(cached && cached.users && cached.users.length > 0);
+  });
+
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [togglingUsernames, setTogglingUsernames] = useState<Record<string, boolean>>({});
 
+  // 1. Fetch Discovery Suggestions on Mount (Stale-while-revalidate in background)
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch('/api/search?q=&type=top')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        const freshUsers = data.users || [];
+        const freshPosts = data.posts || [];
+        const freshReels = data.reels || [];
+
+        setDiscoveryUsers(freshUsers);
+        setDiscoveryPosts(freshPosts);
+        setDiscoveryReels(freshReels);
+
+        setStorageCache(SEARCH_CACHE_KEY, {
+          users: freshUsers,
+          posts: freshPosts,
+          reels: freshReels,
+        });
+        setLoadingDiscovery(false);
+      })
+      .catch((e) => {
+        console.error('Fetch discovery error:', e);
+        if (isMounted) setLoadingDiscovery(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Execute active query search
   const executeSearch = useCallback(async (searchQuery: string, searchType: string) => {
-    if (!searchQuery.trim()) {
-      setUsers([]);
-      setPosts([]);
-      setReels([]);
-      setLoading(false);
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&type=${searchType}`);
+      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}&type=${searchType}`);
       const data = await res.json();
       if (res.ok) {
         setUsers(data.users || []);
@@ -60,6 +122,10 @@ export default function SearchPage() {
 
   // Debounced search effect
   useEffect(() => {
+    if (!query.trim()) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       executeSearch(query, activeTab);
     }, 300);
@@ -77,6 +143,11 @@ export default function SearchPage() {
         u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
       )
     );
+    setDiscoveryUsers((prev) =>
+      prev.map((u) =>
+        u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+      )
+    );
 
     try {
       const res = await fetch(`/api/users/${targetUsername}/follow`, {
@@ -90,17 +161,20 @@ export default function SearchPage() {
             u.username === targetUsername ? { ...u, isFollowing: data.isFollowing } : u
           )
         );
-      } else {
-        // Rollback
-        setUsers((prev) =>
+        setDiscoveryUsers((prev) =>
           prev.map((u) =>
-            u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+            u.username === targetUsername ? { ...u, isFollowing: data.isFollowing } : u
           )
         );
       }
     } catch {
-      // Rollback
+      // Revert on failure
       setUsers((prev) =>
+        prev.map((u) =>
+          u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+        )
+      );
+      setDiscoveryUsers((prev) =>
         prev.map((u) =>
           u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
         )
@@ -110,12 +184,14 @@ export default function SearchPage() {
     }
   };
 
+  const isSearching = query.trim().length > 0;
+
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 pb-24 md:pb-8">
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-6 pb-24 md:pb-8 select-none">
         {/* Search Header */}
         <div className="space-y-4">
-          <h1 className="text-xl font-bold text-white">Search</h1>
+          <h1 className="text-xl font-bold text-white tracking-tight">Search & Discovery</h1>
           <Input
             placeholder="Search accounts, posts, or reels..."
             value={query}
@@ -124,8 +200,8 @@ export default function SearchPage() {
             autoFocus
           />
 
-          {/* Search Tabs */}
-          {query.trim().length > 0 && (
+          {/* Search Tabs (Shown when typing) */}
+          {isSearching && (
             <div className="flex items-center gap-2 border-b border-[#27272a] pb-2 text-xs font-semibold overflow-x-auto">
               <button
                 type="button"
@@ -167,28 +243,152 @@ export default function SearchPage() {
           )}
         </div>
 
-        {/* Loading Spinner */}
+        {/* Loading Spinner during search */}
         {loading && (
           <div className="py-16 text-center text-zinc-500">
             <Loader2 className="w-6 h-6 animate-spin mx-auto" />
           </div>
         )}
 
-        {/* Initial Empty State */}
-        {!loading && !query.trim() && (
-          <div className="py-16 text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#121215] border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500">
-              <Users className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-semibold text-white">Explore the Community</h3>
-            <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-              Type in a name, username, or topic above to find accounts, photo posts, and video reels.
-            </p>
+        {/* ================================================================= */}
+        {/* DEFAULT DISCOVERY VIEW (When search box is empty) */}
+        {/* ================================================================= */}
+        {!isSearching && (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* Suggested 5 Accounts Section */}
+            {discoveryUsers.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-300">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Suggested Creators</span>
+                  </div>
+                  <span className="text-[11px] text-zinc-500">5 Discovery Accounts</span>
+                </div>
+
+                <div className="bg-[#121215] border border-[#27272a] rounded-2xl p-2 divide-y divide-[#27272a]/60 shadow-xl">
+                  {discoveryUsers.map((item) => {
+                    const isSelf = currentUser && currentUser._id.toString() === item._id;
+                    return (
+                      <div
+                        key={item._id}
+                        className="flex items-center justify-between p-3 rounded-xl hover:bg-[#18181b] transition-colors group"
+                      >
+                        <Link
+                          href={`/u/${item.username}`}
+                          className="flex items-center gap-3 min-w-0 flex-1"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center font-bold text-xs text-white shrink-0">
+                            {item.avatar ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={item.avatar}
+                                alt={item.displayName}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              item.displayName?.charAt(0).toUpperCase() || 'U'
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-white truncate group-hover:underline">
+                              {item.displayName}
+                            </p>
+                            <p className="text-xs text-zinc-400 truncate">@{item.username}</p>
+                          </div>
+                        </Link>
+
+                        {currentUser && !isSelf && (
+                          <Button
+                            size="sm"
+                            variant={item.isFollowing ? 'secondary' : 'primary'}
+                            isLoading={togglingUsernames[item.username]}
+                            onClick={() => handleToggleFollow(item.username)}
+                            className="ml-3 shrink-0 text-xs px-3 py-1.5 h-8 cursor-pointer"
+                            leftIcon={
+                              item.isFollowing ? (
+                                <UserCheck className="w-3.5 h-3.5 text-zinc-300" />
+                              ) : (
+                                <UserPlus className="w-3.5 h-3.5 text-zinc-950" />
+                              )
+                            }
+                          >
+                            {item.isFollowing ? 'Following' : 'Follow'}
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Trending Discovery Reels */}
+            {discoveryReels.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-300">
+                  <Clapperboard className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Trending Reels</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {discoveryReels.map((reel) => (
+                    <Link
+                      key={reel._id}
+                      href={`/reels#${reel._id}`}
+                      className="relative aspect-[9/16] bg-[#121215] border border-[#27272a]/60 rounded-xl overflow-hidden group cursor-pointer"
+                    >
+                      {reel.video.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={reel.video.thumbnail}
+                          alt="Reel thumbnail"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <video
+                          src={reel.video.secureUrl || reel.video.url}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2">
+                        <div className="flex items-center gap-1 text-white text-[11px] font-bold">
+                          <Play className="w-3 h-3 fill-white" />
+                          <span>{reel.viewsCount || 0}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Explore Posts Grid */}
+            {discoveryPosts.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-zinc-300">
+                  <Grid className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Explore Posts</span>
+                </div>
+                <PostGrid
+                  posts={discoveryPosts}
+                  onPostClick={(post) => setSelectedPostId(post._id)}
+                />
+              </div>
+            )}
+
+            {loadingDiscovery && discoveryUsers.length === 0 && (
+              <div className="py-12 text-center text-zinc-500">
+                <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                <p className="text-xs text-zinc-400">Loading discovery suggestions...</p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Results Container */}
-        {!loading && query.trim().length > 0 && (
+        {/* ================================================================= */}
+        {/* ACTIVE SEARCH RESULTS CONTAINER */}
+        {/* ================================================================= */}
+        {!loading && isSearching && (
           <div className="space-y-6">
             {/* Users Section */}
             {(activeTab === 'top' || activeTab === 'users') && users.length > 0 && (

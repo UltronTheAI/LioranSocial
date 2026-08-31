@@ -131,7 +131,11 @@ export function ReelPlayer({
           }
         })
         .catch(() => {
-          // Autoplay prevented
+          // Fallback to muted playback if browser policy blocks unmuted autoplay without gesture
+          if (!isMuted) {
+            video.muted = true;
+            video.play().catch(() => {});
+          }
         });
     } else {
       video.pause();

@@ -6,13 +6,21 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import { StoryViewerModal, StoryGroupData } from './StoryViewerModal';
 import { CreateStoryModal } from './CreateStoryModal';
+import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
+
+const STORIES_CACHE_KEY = 'lioran_cached_stories';
 
 export function StoryCirclesBar() {
   const { user: currentUser } = useAuth();
   const { socket } = useSocket();
 
-  const [storyGroups, setStoryGroups] = useState<StoryGroupData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [storyGroups, setStoryGroups] = useState<StoryGroupData[]>(() => {
+    return getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY) || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    const cached = getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY);
+    return !(cached && cached.length > 0);
+  });
   const [activeAuthorIndex, setActiveAuthorIndex] = useState<number | null>(null);
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
 
@@ -20,7 +28,8 @@ export function StoryCirclesBar() {
     try {
       const res = await fetch('/api/stories', { cache: 'no-store' });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.storyGroups) {
+        setStorageCache(STORIES_CACHE_KEY, data.storyGroups);
         return data.storyGroups || [];
       }
       return [];
@@ -32,7 +41,9 @@ export function StoryCirclesBar() {
 
   const refreshStories = useCallback(async () => {
     const groups = await fetchStoriesData();
-    setStoryGroups(groups);
+    if (groups.length > 0) {
+      setStoryGroups(groups);
+    }
   }, [fetchStoriesData]);
 
   const handleStoryViewed = useCallback((storyId: string) => {
@@ -66,6 +77,7 @@ export function StoryCirclesBar() {
 
   useEffect(() => {
     let isMounted = true;
+
     fetchStoriesData().then((groups) => {
       if (isMounted) {
         setStoryGroups(groups);

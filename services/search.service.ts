@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
 import User from '@/models/User';
 import Post from '@/models/Post';
@@ -28,8 +29,67 @@ export async function searchContent(
   await connectToDatabase();
 
   const trimmed = query.trim();
+
+  // If query is empty, return top 5 discovery suggestions + trending discovery media
   if (!trimmed) {
-    return { users: [], posts: [], reels: [] };
+    let viewerFollowingIds = new Set<string>();
+    if (currentUserId && Types.ObjectId.isValid(currentUserId)) {
+      const viewerFollows = await Follow.find({
+        followerId: new Types.ObjectId(currentUserId),
+      }).select('followingId').lean();
+      viewerFollowingIds = new Set(viewerFollows.map((f) => f.followingId.toString()));
+    }
+
+    const userExcludeFilter = currentUserId && Types.ObjectId.isValid(currentUserId)
+      ? { _id: { $ne: new Types.ObjectId(currentUserId) } }
+      : {};
+
+    const [discoveryUsers, discoveryPosts, discoveryReels] = await Promise.all([
+      User.find(userExcludeFilter)
+        .select('-passwordHash')
+        .sort({ followersCount: -1, createdAt: -1 })
+        .limit(5)
+        .lean(),
+      Post.find()
+        .sort({ likesCount: -1, createdAt: -1 })
+        .limit(9)
+        .populate('authorId', 'username displayName avatar emailVerified')
+        .lean(),
+      Reel.find()
+        .sort({ viewsCount: -1, createdAt: -1 })
+        .limit(6)
+        .populate('authorId', 'username displayName avatar emailVerified')
+        .lean(),
+    ]);
+
+    const formattedUsers: SearchUserResult[] = discoveryUsers.map((u) => {
+      const idStr = u._id.toString();
+      return {
+        ...u,
+        _id: idStr,
+        isFollowing: viewerFollowingIds.has(idStr),
+      } as SearchUserResult;
+    });
+
+    const formattedPosts = discoveryPosts.map((p) => ({
+      ...p,
+      _id: p._id.toString(),
+      author: p.authorId,
+      authorId: undefined,
+    }));
+
+    const formattedReels = discoveryReels.map((r) => ({
+      ...r,
+      _id: r._id.toString(),
+      author: r.authorId,
+      authorId: undefined,
+    }));
+
+    return {
+      users: formattedUsers,
+      posts: formattedPosts,
+      reels: formattedReels,
+    };
   }
 
   const safePattern = new RegExp(escapeRegex(trimmed), 'i');
@@ -52,9 +112,9 @@ export async function searchContent(
 
     // Check if current user is following found users
     let viewerFollowingIds = new Set<string>();
-    if (currentUserId) {
+    if (currentUserId && Types.ObjectId.isValid(currentUserId)) {
       const viewerFollows = await Follow.find({
-        followerId: currentUserId,
+        followerId: new Types.ObjectId(currentUserId),
       }).select('followingId').lean();
       viewerFollowingIds = new Set(viewerFollows.map((f) => f.followingId.toString()));
     }
