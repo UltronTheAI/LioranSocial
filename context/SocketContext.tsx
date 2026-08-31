@@ -33,25 +33,47 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
+        setSocket(null);
+        setIsConnected(false);
       }
       return;
     }
 
-    // Initialize socket connection
+    // Initialize permanent socket connection
     const socketInstance = io(window.location.origin, {
       path: '/socket.io',
       withCredentials: true,
+      auth: {
+        userId: user._id,
+        username: user.username,
+      },
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       transports: ['websocket', 'polling'],
     });
 
     socketRef.current = socketInstance;
 
+    const registerUser = () => {
+      if (user?._id) {
+        socketInstance.emit('user:register', {
+          userId: user._id,
+          username: user.username,
+        });
+      }
+    };
+
     socketInstance.on('connect', () => {
       setSocket(socketInstance);
       setIsConnected(true);
+      registerUser();
+    });
+
+    socketInstance.on('reconnect', () => {
+      setIsConnected(true);
+      registerUser();
     });
 
     socketInstance.on('disconnect', () => {

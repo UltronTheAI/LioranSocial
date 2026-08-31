@@ -346,7 +346,7 @@ export function AppShell({ children }: AppShellProps) {
           isReelsPage
             ? 'overflow-hidden pb-0'
             : pathname.startsWith('/messages')
-            ? 'overflow-y-auto pb-0'
+            ? 'overflow-hidden pb-14 md:pb-0'
             : 'overflow-y-auto pb-16 md:pb-0'
         )}
       >
@@ -356,105 +356,103 @@ export function AppShell({ children }: AppShellProps) {
       {/* ========================================================================= */}
       {/* Mobile Bottom Navigation Bar */}
       {/* ========================================================================= */}
-      {!pathname.startsWith('/messages') && (
-        <nav
-          className={cn(
-            'md:hidden fixed bottom-0 left-0 right-0 h-14 px-2 py-2 flex items-center justify-around z-30 transition-colors',
-            isReelsPage
-              ? 'bg-black border-t border-[#27272a]'
-              : 'bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a]'
-          )}
-        >
-          {mobileNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              item.href === '/'
-                ? pathname === '/'
-                : item.href !== '#create' && pathname.startsWith(item.href);
+      <nav
+        className={cn(
+          'md:hidden fixed bottom-0 left-0 right-0 h-14 px-2 py-2 flex items-center justify-around z-30 transition-colors',
+          isReelsPage
+            ? 'bg-black border-t border-[#27272a]'
+            : 'bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a]'
+        )}
+      >
+        {mobileNavItems.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            item.href === '/'
+              ? pathname === '/'
+              : item.href !== '#create' && pathname.startsWith(item.href);
 
-            if (item.onClick) {
-              return (
-                <div key={item.label} className="relative">
-                  <button
-                    onClick={item.onClick}
-                    className="p-2.5 rounded-xl text-zinc-300 hover:text-white transition-colors cursor-pointer drop-shadow-md"
-                    aria-label={item.label}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </button>
-
-                  {/* Mobile Create Popup */}
-                  {showCreateMenu && (
-                    <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end justify-center p-4">
-                      <div className="w-full max-w-xs bg-[#18181b] border border-[#27272a] rounded-3xl p-3 shadow-2xl space-y-1 mb-16 animate-in slide-in-from-bottom duration-150">
-                        <div className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                          Create
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowCreateMenu(false);
-                            setIsCreatePostOpen(true);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
-                        >
-                          <ImageIcon className="w-4 h-4 text-emerald-400" />
-                          <span>Photo Post</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowCreateMenu(false);
-                            setIsCreateReelOpen(true);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
-                        >
-                          <Clapperboard className="w-4 h-4 text-rose-400" />
-                          <span>Video Reel</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowCreateMenu(false);
-                            setIsCreateStoryOpen(true);
-                          }}
-                          className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
-                        >
-                          <CircleDashed className="w-4 h-4 text-amber-400" />
-                          <span>24h Story</span>
-                        </button>
-                        <button
-                          onClick={() => setShowCreateMenu(false)}
-                          className="w-full py-2.5 text-center text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
+          if (item.onClick) {
             return (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={cn(
-                  'p-2.5 rounded-xl transition-colors',
-                  isActive
-                    ? isReelsPage
-                      ? 'text-white'
-                      : 'text-white bg-[#18181b]'
-                    : isReelsPage
-                    ? 'text-zinc-300 hover:text-white drop-shadow-md'
-                    : 'text-zinc-400 hover:text-white'
+              <div key={item.label} className="relative">
+                <button
+                  onClick={item.onClick}
+                  className="p-2.5 rounded-xl text-zinc-300 hover:text-white transition-colors cursor-pointer drop-shadow-md"
+                  aria-label={item.label}
+                >
+                  <Icon className="w-5 h-5" />
+                </button>
+
+                {/* Mobile Create Popup */}
+                {showCreateMenu && (
+                  <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end justify-center p-4">
+                    <div className="w-full max-w-xs bg-[#18181b] border border-[#27272a] rounded-3xl p-3 shadow-2xl space-y-1 mb-16 animate-in slide-in-from-bottom duration-150">
+                      <div className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                        Create
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setIsCreatePostOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
+                      >
+                        <ImageIcon className="w-4 h-4 text-emerald-400" />
+                        <span>Photo Post</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setIsCreateReelOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
+                      >
+                        <Clapperboard className="w-4 h-4 text-rose-400" />
+                        <span>Video Reel</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCreateMenu(false);
+                          setIsCreateStoryOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
+                      >
+                        <CircleDashed className="w-4 h-4 text-amber-400" />
+                        <span>24h Story</span>
+                      </button>
+                      <button
+                        onClick={() => setShowCreateMenu(false)}
+                        className="w-full py-2.5 text-center text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 )}
-                aria-label={item.label}
-              >
-                <Icon className="w-5 h-5" />
-              </Link>
+              </div>
             );
-          })}
-        </nav>
-      )}
+          }
+
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={cn(
+                'p-2.5 rounded-xl transition-colors',
+                isActive
+                  ? isReelsPage
+                    ? 'text-white'
+                    : 'text-white bg-[#18181b]'
+                  : isReelsPage
+                  ? 'text-zinc-300 hover:text-white drop-shadow-md'
+                  : 'text-zinc-400 hover:text-white'
+              )}
+              aria-label={item.label}
+            >
+              <Icon className="w-5 h-5" />
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Global Creation Modals */}
       <CreatePostModal

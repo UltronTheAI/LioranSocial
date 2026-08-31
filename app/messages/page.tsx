@@ -7,9 +7,11 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ConversationList } from '@/components/messages/ConversationList';
 import { ChatWindow } from '@/components/messages/ChatWindow';
 import { PopulatedConversation } from '@/services/conversation.service';
+import { useSocket } from '@/context/SocketContext';
 
 function MessagesContent() {
   const searchParams = useSearchParams();
+  const { socket } = useSocket();
 
   const targetUserId = searchParams.get('user');
   const targetConvId = searchParams.get('c');
@@ -31,6 +33,52 @@ function MessagesContent() {
       return [];
     }
   }, []);
+
+  // Live Socket listener to reorder and update conversations on incoming messages
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleIncomingMessage = (msg: {
+      _id: string;
+      conversationId: string;
+      sender?: { _id?: string; username: string };
+      type: string;
+      text?: string;
+      createdAt: Date;
+    }) => {
+      setConversations((prev) => {
+        const convIndex = prev.findIndex((c) => c._id === msg.conversationId);
+        if (convIndex !== -1) {
+          const updatedConv: PopulatedConversation = {
+            ...prev[convIndex],
+            lastMessage: {
+              _id: msg._id,
+              senderId: msg.sender?._id || '',
+              type: msg.type,
+              text: msg.text,
+              createdAt: msg.createdAt,
+            },
+            lastActivityAt: msg.createdAt,
+          };
+          const rest = prev.filter((c) => c._id !== msg.conversationId);
+          return [updatedConv, ...rest];
+        } else {
+          // If a new conversation was created by someone else, re-fetch list
+          fetchConversations().then((fresh) => {
+            if (fresh && fresh.length > 0) {
+              setConversations(fresh);
+            }
+          });
+          return prev;
+        }
+      });
+    };
+
+    socket.on('message:new', handleIncomingMessage);
+    return () => {
+      socket.off('message:new', handleIncomingMessage);
+    };
+  }, [socket, fetchConversations]);
 
   // Handle direct user messaging via query parameter ?user=...
   const handleResolveUserParam = useCallback(
