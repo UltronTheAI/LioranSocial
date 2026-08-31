@@ -343,7 +343,7 @@ export function AppShell({ children }: AppShellProps) {
       <main
         className={cn(
           'flex-1 min-w-0 overflow-y-auto',
-          pathname.startsWith('/messages') || isReelsPage ? 'pb-0' : 'pb-16 md:pb-0'
+          pathname.startsWith('/messages') ? 'pb-0' : isReelsPage ? 'pb-14 md:pb-0' : 'pb-16 md:pb-0'
         )}
       >
         {children}
@@ -355,9 +355,9 @@ export function AppShell({ children }: AppShellProps) {
       {!pathname.startsWith('/messages') && (
         <nav
           className={cn(
-            'md:hidden fixed bottom-0 left-0 right-0 px-2 py-2 flex items-center justify-around z-30 transition-colors',
+            'md:hidden fixed bottom-0 left-0 right-0 h-14 px-2 py-2 flex items-center justify-around z-30 transition-colors',
             isReelsPage
-              ? 'bg-gradient-to-t from-black/80 via-black/40 to-transparent border-none'
+              ? 'bg-black border-t border-[#27272a]'
               : 'bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a]'
           )}
         >

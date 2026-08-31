@@ -159,6 +159,41 @@ export function PostDetailModal({
     };
   }, [postId, isOpen, fetchPostDetailsData]);
 
+  // Jam background page scrolling while modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  // Android & Browser Hardware Back button support (Closes post modal instead of navigating page back)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    window.history.pushState({ modal: 'post-detail' }, '');
+
+    const handlePopState = () => {
+      onClose();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen, onClose]);
+
+  const handleSafeClose = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.modal === 'post-detail') {
+      window.history.back();
+    } else {
+      onClose();
+    }
+  }, [onClose]);
+
   // Organize top-level comments vs replies
   const { topLevelComments, repliesByParent } = useMemo(() => {
     const topLevel: CommentItem[] = [];
@@ -511,19 +546,25 @@ export function PostDetailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      onClick={handleSafeClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
+    >
       {/* Modal Container */}
-      <div className="bg-[#121215] border border-[#27272a] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col md:flex-row relative">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#121215] border border-[#27272a] rounded-2xl w-full max-w-4xl max-h-[85vh] sm:max-h-[90vh] overflow-hidden shadow-2xl flex flex-col md:flex-row relative"
+      >
         {loading ? (
-          <div className="w-full h-80 md:h-[550px] flex items-center justify-center text-zinc-500">
+          <div className="w-full h-72 md:h-[550px] flex items-center justify-center text-zinc-500">
             <Loader2 className="w-8 h-8 animate-spin" />
           </div>
         ) : !post ? (
           <div className="p-8 text-center text-zinc-400 w-full flex flex-col items-center justify-center gap-3">
             <p>Post not found.</p>
             <button
-              onClick={onClose}
-              className="px-4 py-1.5 rounded-xl bg-zinc-800 text-xs font-bold text-white hover:bg-zinc-700"
+              onClick={handleSafeClose}
+              className="px-4 py-1.5 rounded-xl bg-zinc-800 text-xs font-bold text-white hover:bg-zinc-700 cursor-pointer"
             >
               Close
             </button>
@@ -531,20 +572,20 @@ export function PostDetailModal({
         ) : (
           <>
             {/* Left: Images Carousel */}
-            <div className="w-full md:w-3/5 bg-black flex items-center justify-center">
+            <div className="w-full md:w-3/5 bg-black flex items-center justify-center max-h-[40vh] sm:max-h-[48vh] md:max-h-none overflow-hidden shrink-0 md:shrink">
               <ImageCarousel images={post.images} onDoubleTap={handleToggleLike} />
             </div>
 
             {/* Right: Author, Caption, Comments & Interaction */}
-            <div className="w-full md:w-2/5 flex flex-col justify-between border-t md:border-t-0 md:border-l border-[#27272a] bg-[#121215]">
+            <div className="w-full md:w-2/5 flex flex-col justify-between border-t md:border-t-0 md:border-l border-[#27272a] bg-[#121215] min-h-0 flex-1">
               {/* Header with Author + Single-Line Action Controls */}
-              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-[#27272a]">
+              <div className="flex items-center justify-between p-3 sm:p-4 border-b border-[#27272a]">
                 <Link
                   href={`/u/${post.author.username}`}
-                  onClick={onClose}
+                  onClick={handleSafeClose}
                   className="flex items-center gap-3 group min-w-0 flex-1 mr-2"
                 >
-                  <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center font-bold text-xs text-white shrink-0">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden flex items-center justify-center font-bold text-xs text-white shrink-0">
                     {post.author.avatar ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={post.author.avatar} alt="Avatar" className="w-full h-full object-cover" />
@@ -584,7 +625,7 @@ export function PostDetailModal({
                   )}
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={handleSafeClose}
                     title="Close"
                     className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
                   >
@@ -594,7 +635,7 @@ export function PostDetailModal({
               </div>
 
               {/* Comments Thread & Caption */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-64 md:max-h-[360px]">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 max-h-[30vh] sm:max-h-[35vh] md:max-h-[360px]">
                 {/* Author Caption or Inline Edit Box */}
                 {isEditingCaption ? (
                   <div className="space-y-2 bg-[#18181b] p-3 rounded-xl border border-zinc-700">

@@ -102,6 +102,41 @@ export function ReelCommentDrawer({
     };
   }, [reelId, isOpen, fetchCommentsData]);
 
+  // Jam background page scrolling while comments drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  // Android & Browser Hardware Back button support (Closes drawer instead of navigating page back)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    window.history.pushState({ modal: 'reel-comments' }, '');
+
+    const handlePopState = () => {
+      onClose();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen, onClose]);
+
+  const handleSafeClose = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.modal === 'reel-comments') {
+      window.history.back();
+    } else {
+      onClose();
+    }
+  }, [onClose]);
+
   // Split comments into top-level and replies
   const { topLevelComments, repliesByParent } = useMemo(() => {
     const topLevel: CommentItem[] = [];
@@ -371,14 +406,20 @@ export function ReelCommentDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-[#121215] border border-[#27272a] rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[80vh] h-[550px] flex flex-col shadow-2xl overflow-hidden">
+    <div
+      onClick={handleSafeClose}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#121215] border border-[#27272a] rounded-t-3xl sm:rounded-2xl w-full max-w-lg max-h-[80vh] h-[550px] flex flex-col shadow-2xl overflow-hidden"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#27272a]">
           <h3 className="text-sm font-bold text-white">Comments ({comments.length})</h3>
           <button
-            onClick={onClose}
-            className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            onClick={handleSafeClose}
+            className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

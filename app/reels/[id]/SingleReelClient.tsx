@@ -127,7 +127,7 @@ export function SingleReelClient({
 
   return (
     <AppShell>
-      <div className="relative w-full h-[100dvh] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
+      <div className="relative w-full h-[calc(100dvh-3.5rem)] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
         {/* Top Back / Login Bar */}
         <div className="absolute top-4 left-4 md:left-8 z-30 flex items-center gap-3">
           <Link
@@ -154,8 +154,8 @@ export function SingleReelClient({
           </div>
         )}
 
-        {/* Reel Player (Edge-to-Edge on mobile) */}
-        <div className="w-full h-[100dvh] md:h-screen flex items-center justify-center p-0 sm:py-2">
+        {/* Reel Player (Cleanly fits above bottom nav on mobile) */}
+        <div className="w-full h-[calc(100dvh-3.5rem)] md:h-screen flex items-center justify-center p-0 sm:py-2">
           <ReelPlayer
             reel={reel}
             isActive={true}

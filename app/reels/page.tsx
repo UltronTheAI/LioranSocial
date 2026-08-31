@@ -256,7 +256,7 @@ function ReelsContent() {
   const activeReel = reels[activeReelIndex];
 
   return (
-    <div className="relative w-full h-[100dvh] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
+    <div className="relative w-full h-[calc(100dvh-3.5rem)] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
       {/* Floating Create Reel Button (Logged-in) or Log In/Sign Up (Guest) */}
       {currentUser ? (
         <button
@@ -332,11 +332,11 @@ function ReelsContent() {
                 itemRefs.current[idx] = el;
               }}
               data-reel-index={idx}
-              className="w-full h-[100dvh] md:h-screen flex items-center justify-center snap-start snap-always p-0 sm:py-2"
+              className="w-full h-[calc(100dvh-3.5rem)] md:h-screen flex items-center justify-center snap-start snap-always p-0 sm:py-2"
               style={{
                 scrollSnapAlign: 'start',
                 scrollSnapStop: 'always',
-                height: '100dvh',
+                height: 'calc(100dvh - 3.5rem)',
               }}
             >
               <ReelPlayer
