@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/db';
 import Reel from '@/models/Reel';
 import { SingleReelClient } from './SingleReelClient';
+import { ReelData } from '@/components/reel/ReelPlayer';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -104,5 +105,30 @@ export default async function SingleReelPage({ params }: Props) {
     notFound();
   }
 
-  return <SingleReelClient reelId={id} />;
+  await connectToDatabase();
+
+  const reel = await Reel.findById(id)
+    .populate('authorId', 'username displayName avatar emailVerified')
+    .lean();
+
+  if (!reel) {
+    notFound();
+  }
+
+  const initialReel: ReelData = {
+    _id: reel._id.toString(),
+    author: reel.authorId as unknown as ReelData['author'],
+    video: reel.video,
+    caption: reel.caption || '',
+    mentions: reel.mentions || [],
+    likesCount: reel.likesCount || 0,
+    commentsCount: reel.commentsCount || 0,
+    savesCount: reel.savesCount || 0,
+    viewsCount: reel.viewsCount || 0,
+    isLiked: false,
+    isSaved: false,
+    createdAt: reel.createdAt,
+  };
+
+  return <SingleReelClient reelId={id} initialReel={initialReel} />;
 }

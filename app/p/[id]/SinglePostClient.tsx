@@ -10,11 +10,17 @@ import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 
-export function SinglePostClient({ postId }: { postId: string }) {
+export function SinglePostClient({
+  postId,
+  initialPost,
+}: {
+  postId: string;
+  initialPost?: PostCardData | null;
+}) {
   const { user, loading: authLoading } = useAuth();
 
-  const [post, setPost] = useState<PostCardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [post, setPost] = useState<PostCardData | null>(initialPost || null);
+  const [loading, setLoading] = useState(!initialPost);
   const [notFound, setNotFound] = useState(false);
 
   // Selected post for modal comments
@@ -23,8 +29,9 @@ export function SinglePostClient({ postId }: { postId: string }) {
 
   const timerTriggeredRef = useRef(false);
 
-  // 1. Fetch Post Details
+  // 1. Fetch Post Details (only if not provided initially)
   useEffect(() => {
+    if (initialPost) return;
     let isMounted = true;
 
     fetch(`/api/posts/${postId}`, { cache: 'no-store' })
@@ -57,7 +64,7 @@ export function SinglePostClient({ postId }: { postId: string }) {
     return () => {
       isMounted = false;
     };
-  }, [postId]);
+  }, [postId, initialPost]);
 
   // 2. 10-second Guest Timer to Show Login Option
   useEffect(() => {

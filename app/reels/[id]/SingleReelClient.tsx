@@ -10,11 +10,17 @@ import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 
-export function SingleReelClient({ reelId }: { reelId: string }) {
+export function SingleReelClient({
+  reelId,
+  initialReel,
+}: {
+  reelId: string;
+  initialReel?: ReelData | null;
+}) {
   const { user, loading: authLoading } = useAuth();
 
-  const [reel, setReel] = useState<ReelData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [reel, setReel] = useState<ReelData | null>(initialReel || null);
+  const [loading, setLoading] = useState(!initialReel);
   const [notFound, setNotFound] = useState(false);
 
   const [isMuted, setIsMuted] = useState(false);
@@ -23,8 +29,9 @@ export function SingleReelClient({ reelId }: { reelId: string }) {
 
   const timerTriggeredRef = useRef(false);
 
-  // 1. Fetch Reel Details
+  // 1. Fetch Reel Details (Only if not provided initially or refresh needed)
   useEffect(() => {
+    if (initialReel) return;
     let isMounted = true;
 
     fetch(`/api/reels/${reelId}`, { cache: 'no-store' })
@@ -57,7 +64,7 @@ export function SingleReelClient({ reelId }: { reelId: string }) {
     return () => {
       isMounted = false;
     };
-  }, [reelId]);
+  }, [reelId, initialReel]);
 
   // 2. 10-second Guest Timer to Show Login Option
   useEffect(() => {
@@ -85,7 +92,7 @@ export function SingleReelClient({ reelId }: { reelId: string }) {
   if (loading) {
     return (
       <AppShell>
-        <div className="h-[calc(100vh-4rem)] md:h-screen flex items-center justify-center bg-[#09090b]">
+        <div className="h-[100dvh] md:h-screen flex items-center justify-center bg-[#09090b]">
           <div className="flex flex-col items-center gap-3 animate-pulse">
             <Loader2 className="w-8 h-8 animate-spin text-zinc-500" />
             <p className="text-xs text-zinc-500">Loading reel...</p>
@@ -120,7 +127,7 @@ export function SingleReelClient({ reelId }: { reelId: string }) {
 
   return (
     <AppShell>
-      <div className="relative h-[calc(100dvh-3.5rem)] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
+      <div className="relative w-full h-[100dvh] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
         {/* Top Back / Login Bar */}
         <div className="absolute top-4 left-4 md:left-8 z-30 flex items-center gap-3">
           <Link
@@ -147,8 +154,8 @@ export function SingleReelClient({ reelId }: { reelId: string }) {
           </div>
         )}
 
-        {/* Reel Player */}
-        <div className="w-full h-full flex items-center justify-center py-1 sm:py-2">
+        {/* Reel Player (Edge-to-Edge on mobile) */}
+        <div className="w-full h-[100dvh] md:h-screen flex items-center justify-center p-0 sm:py-2">
           <ReelPlayer
             reel={reel}
             isActive={true}
@@ -187,4 +194,3 @@ export function SingleReelClient({ reelId }: { reelId: string }) {
     </AppShell>
   );
 }
-

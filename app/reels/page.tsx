@@ -256,7 +256,7 @@ function ReelsContent() {
   const activeReel = reels[activeReelIndex];
 
   return (
-    <div className="relative h-[calc(100dvh-3.5rem)] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
+    <div className="relative w-full h-[100dvh] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
       {/* Floating Create Reel Button (Logged-in) or Log In/Sign Up (Guest) */}
       {currentUser ? (
         <button
@@ -318,10 +318,11 @@ function ReelsContent() {
       {reels.length > 0 && (
         <div
           ref={containerRef}
-          className="w-full h-full overflow-y-auto snap-y snap-mandatory overscroll-y-contain scrollbar-none touch-pan-y"
+          className="w-full h-full overflow-y-scroll snap-y snap-mandatory overscroll-y-contain scrollbar-none touch-pan-y"
           style={{
             scrollSnapType: 'y mandatory',
             WebkitOverflowScrolling: 'touch',
+            overscrollBehaviorY: 'contain',
           }}
         >
           {reels.map((reel, idx) => (
@@ -331,8 +332,12 @@ function ReelsContent() {
                 itemRefs.current[idx] = el;
               }}
               data-reel-index={idx}
-              className="w-full h-full flex items-center justify-center snap-start snap-always py-1 sm:py-2"
-              style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
+              className="w-full h-[100dvh] md:h-screen flex items-center justify-center snap-start snap-always p-0 sm:py-2"
+              style={{
+                scrollSnapAlign: 'start',
+                scrollSnapStop: 'always',
+                height: '100dvh',
+              }}
             >
               <ReelPlayer
                 reel={reel}

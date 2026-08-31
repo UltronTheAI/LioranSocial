@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/db';
 import Post from '@/models/Post';
 import { SinglePostClient } from './SinglePostClient';
+import { PostCardData } from '@/components/post/PostCard';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -84,5 +85,29 @@ export default async function SinglePostPage({ params }: Props) {
     notFound();
   }
 
-  return <SinglePostClient postId={id} />;
+  await connectToDatabase();
+
+  const post = await Post.findById(id)
+    .populate('authorId', 'username displayName avatar emailVerified')
+    .lean();
+
+  if (!post) {
+    notFound();
+  }
+
+  const initialPost: PostCardData = {
+    _id: post._id.toString(),
+    author: post.authorId as unknown as PostCardData['author'],
+    images: post.images || [],
+    caption: post.caption || '',
+    mentions: post.mentions || [],
+    likesCount: post.likesCount || 0,
+    commentsCount: post.commentsCount || 0,
+    savesCount: post.savesCount || 0,
+    isLiked: false,
+    isSaved: false,
+    createdAt: post.createdAt,
+  };
+
+  return <SinglePostClient postId={id} initialPost={initialPost} />;
 }

@@ -83,6 +83,7 @@ export function ReelPlayer({
 }: ReelPlayerProps) {
   const { user: currentUser } = useAuth();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const progressBarRef = useRef<HTMLDivElement | null>(null);
 
   const [currentCaption, setCurrentCaption] = useState(reel.caption);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -92,7 +93,6 @@ export function ReelPlayer({
   const [showHeartPop, setShowHeartPop] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isGuestAuthModalOpen, setIsGuestAuthModalOpen] = useState(false);
@@ -164,12 +164,14 @@ export function ReelPlayer({
     }
   }, [isMuted]);
 
-  // Track progress
+  // Track progress without triggering full React re-renders on each animation frame
   const handleTimeUpdate = () => {
     const video = videoRef.current;
     if (!video || !video.duration) return;
     const currentProgress = (video.currentTime / video.duration) * 100;
-    setProgress(currentProgress);
+    if (progressBarRef.current) {
+      progressBarRef.current.style.width = `${currentProgress}%`;
+    }
   };
 
   // Tap video to play/pause
@@ -298,7 +300,13 @@ export function ReelPlayer({
   };
 
   return (
-    <div className="relative w-full max-w-sm sm:max-w-md h-[82vh] sm:h-[86vh] mx-auto bg-black rounded-none sm:rounded-2xl overflow-hidden shadow-2xl border-0 sm:border sm:border-[#27272a]/60 select-none flex items-center justify-center snap-center group">
+    <div
+      className="relative w-full h-full sm:max-w-md sm:h-[88vh] md:h-[90vh] mx-auto bg-black rounded-none sm:rounded-2xl overflow-hidden shadow-2xl border-0 sm:border sm:border-[#27272a]/60 select-none flex items-center justify-center snap-center group"
+      style={{
+        transform: 'translateZ(0)',
+        willChange: 'transform',
+      }}
+    >
       {/* Video Element */}
       <video
         ref={videoRef}
@@ -313,6 +321,10 @@ export function ReelPlayer({
         onClick={handleVideoTap}
         onDoubleClick={handleDoubleTap}
         className="w-full h-full object-cover cursor-pointer"
+        style={{
+          transform: 'translateZ(0)',
+          backfaceVisibility: 'hidden',
+        }}
       />
 
       {/* Play/Pause Center Indicator */}
@@ -541,7 +553,7 @@ export function ReelPlayer({
 
       {/* Bottom Progress Bar */}
       <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-30 pointer-events-none">
-        <div className="h-full bg-white transition-all duration-100" style={{ width: `${progress}%` }} />
+        <div ref={progressBarRef} className="h-full bg-white transition-all duration-75" style={{ width: '0%' }} />
       </div>
 
       {/* Share to Chat / Story Modal */}

@@ -69,6 +69,7 @@ export function AppShell({ children }: AppShellProps) {
 
   const effectiveUnreadNotifCount = pathname.startsWith('/notifications') ? 0 : unreadNotifCount;
   const effectiveUnreadMsgCount = pathname.startsWith('/messages') ? 0 : unreadMsgCount;
+  const isReelsPage = pathname.startsWith('/reels') || pathname.startsWith('/r/');
 
   const profileHref = user?.username ? `/u/${user.username}` : '/login';
 
@@ -139,7 +140,7 @@ export function AppShell({ children }: AppShellProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex flex-col md:flex-row overflow-x-hidden">
       {/* Global Live Notification Toaster */}
       <LiveNotificationToast />
 
@@ -302,37 +303,39 @@ export function AppShell({ children }: AppShellProps) {
       </aside>
 
       {/* ========================================================================= */}
-      {/* Mobile Top Header */}
+      {/* Mobile Top Header (Hidden on Reels for edge-to-edge full screen) */}
       {/* ========================================================================= */}
-      <header className="md:hidden sticky top-0 bg-[#09090b]/95 backdrop-blur-md border-b border-[#27272a] px-4 py-3 flex items-center justify-between z-30">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs text-white">
-            L
+      {!isReelsPage && (
+        <header className="md:hidden sticky top-0 bg-[#09090b]/95 backdrop-blur-md border-b border-[#27272a] px-4 py-3 flex items-center justify-between z-30">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs text-white">
+              L
+            </div>
+            <span className="font-bold tracking-tight text-white text-base">LioranSocial</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/notifications" className="p-2 text-zinc-400 hover:text-white relative">
+              <Heart className="w-5 h-5" />
+              {effectiveUnreadNotifCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#09090b]" />
+              )}
+            </Link>
+            <Link href="/messages" className="p-2 text-zinc-400 hover:text-white relative">
+              <MessageCircle className="w-5 h-5" />
+              {effectiveUnreadMsgCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-[#09090b]" />
+              )}
+            </Link>
+            <button
+              onClick={() => logout()}
+              className="p-2 text-zinc-400 hover:text-rose-400 cursor-pointer"
+              title="Log out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
-          <span className="font-bold tracking-tight text-white text-base">LioranSocial</span>
-        </Link>
-        <div className="flex items-center gap-2">
-          <Link href="/notifications" className="p-2 text-zinc-400 hover:text-white relative">
-            <Heart className="w-5 h-5" />
-            {effectiveUnreadNotifCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#09090b]" />
-            )}
-          </Link>
-          <Link href="/messages" className="p-2 text-zinc-400 hover:text-white relative">
-            <MessageCircle className="w-5 h-5" />
-            {effectiveUnreadMsgCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-[#09090b]" />
-            )}
-          </Link>
-          <button
-            onClick={() => logout()}
-            className="p-2 text-zinc-400 hover:text-rose-400 cursor-pointer"
-            title="Log out"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* ========================================================================= */}
       {/* Main Content Area */}
@@ -340,7 +343,7 @@ export function AppShell({ children }: AppShellProps) {
       <main
         className={cn(
           'flex-1 min-w-0 overflow-y-auto',
-          pathname.startsWith('/messages') ? 'pb-0' : 'pb-16 md:pb-0'
+          pathname.startsWith('/messages') || isReelsPage ? 'pb-0' : 'pb-16 md:pb-0'
         )}
       >
         {children}
@@ -350,7 +353,14 @@ export function AppShell({ children }: AppShellProps) {
       {/* Mobile Bottom Navigation Bar */}
       {/* ========================================================================= */}
       {!pathname.startsWith('/messages') && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a] px-2 py-2 flex items-center justify-around z-30">
+        <nav
+          className={cn(
+            'md:hidden fixed bottom-0 left-0 right-0 px-2 py-2 flex items-center justify-around z-30 transition-colors',
+            isReelsPage
+              ? 'bg-gradient-to-t from-black/80 via-black/40 to-transparent border-none'
+              : 'bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a]'
+          )}
+        >
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive =
@@ -363,7 +373,7 @@ export function AppShell({ children }: AppShellProps) {
                 <div key={item.label} className="relative">
                   <button
                     onClick={item.onClick}
-                    className="p-2.5 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    className="p-2.5 rounded-xl text-zinc-300 hover:text-white transition-colors cursor-pointer drop-shadow-md"
                     aria-label={item.label}
                   >
                     <Icon className="w-5 h-5" />
@@ -425,7 +435,13 @@ export function AppShell({ children }: AppShellProps) {
                 href={item.href}
                 className={cn(
                   'p-2.5 rounded-xl transition-colors',
-                  isActive ? 'text-white bg-[#18181b]' : 'text-zinc-400 hover:text-white'
+                  isActive
+                    ? isReelsPage
+                      ? 'text-white'
+                      : 'text-white bg-[#18181b]'
+                    : isReelsPage
+                    ? 'text-zinc-300 hover:text-white drop-shadow-md'
+                    : 'text-zinc-400 hover:text-white'
                 )}
                 aria-label={item.label}
               >
