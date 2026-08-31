@@ -73,10 +73,29 @@ function renderTextWithMentions(text: string) {
   });
 }
 
+export function getAdaptiveVideoUrl(rawUrl?: string, isLowNetwork = false): string {
+  if (!rawUrl) return '';
+  if (!rawUrl.includes('cloudinary.com')) return rawUrl;
+
+  // For weak networks / 2G / 3G / Android data saver: deliver compressed 480p low-bitrate stream
+  if (isLowNetwork) {
+    if (rawUrl.includes('/video/upload/')) {
+      return rawUrl.replace('/video/upload/', '/video/upload/q_auto:low,w_480,vc_auto,br_500k/');
+    }
+  }
+
+  // Auto quality streaming for normal networks
+  if (rawUrl.includes('/video/upload/') && !rawUrl.includes('/video/upload/q_auto')) {
+    return rawUrl.replace('/video/upload/', '/video/upload/q_auto,vc_auto/');
+  }
+
+  return rawUrl;
+}
+
 export function ReelPlayer({
   reel,
   isActive,
-  isMuted,
+  isMuted = false,
   onToggleMute,
   onOpenComments,
   onReelDeleted,
@@ -96,6 +115,38 @@ export function ReelPlayer({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isGuestAuthModalOpen, setIsGuestAuthModalOpen] = useState(false);
+  const [isLowNetwork, setIsLowNetwork] = useState(false);
+
+  // Detect slow 2G/3G network or Data Saver mode on Android / Mobile
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      type NetworkConn = {
+        saveData?: boolean;
+        effectiveType?: string;
+        addEventListener?: (type: string, listener: () => void) => void;
+        removeEventListener?: (type: string, listener: () => void) => void;
+      };
+      const nav = navigator as unknown as {
+        connection?: NetworkConn;
+        mozConnection?: NetworkConn;
+        webkitConnection?: NetworkConn;
+      };
+      const conn = nav.connection || nav.mozConnection || nav.webkitConnection;
+      if (conn) {
+        const updateNetworkQuality = () => {
+          const isSlow =
+            conn.saveData === true ||
+            conn.effectiveType === '2g' ||
+            conn.effectiveType === 'slow-2g' ||
+            conn.effectiveType === '3g';
+          setIsLowNetwork(Boolean(isSlow));
+        };
+        updateNetworkQuality();
+        conn.addEventListener?.('change', updateNetworkQuality);
+        return () => conn.removeEventListener?.('change', updateNetworkQuality);
+      }
+    }
+  }, []);
 
   // Edit Caption state
   const [isEditingCaption, setIsEditingCaption] = useState(false);
@@ -310,7 +361,7 @@ export function ReelPlayer({
       {/* Video Element */}
       <video
         ref={videoRef}
-        src={reel.video.secureUrl || reel.video.url}
+        src={getAdaptiveVideoUrl(reel.video.secureUrl || reel.video.url, isLowNetwork)}
         poster={reel.video.thumbnail}
         loop
         playsInline

@@ -115,10 +115,32 @@ export default async function SingleReelPage({ params }: Props) {
     notFound();
   }
 
+  const authorDoc = reel.authorId as unknown as {
+    _id?: { toString: () => string };
+    username?: string;
+    displayName?: string;
+    avatar?: string;
+    emailVerified?: boolean;
+  };
+
   const initialReel: ReelData = {
     _id: reel._id.toString(),
-    author: reel.authorId as unknown as ReelData['author'],
-    video: reel.video,
+    author: {
+      _id: authorDoc?._id ? authorDoc._id.toString() : '',
+      username: authorDoc?.username || 'user',
+      displayName: authorDoc?.displayName || 'Creator',
+      avatar: authorDoc?.avatar || '',
+      emailVerified: Boolean(authorDoc?.emailVerified),
+    },
+    video: {
+      publicId: reel.video?.publicId || '',
+      url: reel.video?.url || '',
+      secureUrl: reel.video?.secureUrl || reel.video?.url || '',
+      thumbnail: reel.video?.thumbnail || '',
+      duration: reel.video?.duration || 0,
+      width: reel.video?.width || 720,
+      height: reel.video?.height || 1280,
+    },
     caption: reel.caption || '',
     mentions: reel.mentions || [],
     likesCount: reel.likesCount || 0,
@@ -127,8 +149,8 @@ export default async function SingleReelPage({ params }: Props) {
     viewsCount: reel.viewsCount || 0,
     isLiked: false,
     isSaved: false,
-    createdAt: reel.createdAt,
+    createdAt: reel.createdAt ? new Date(reel.createdAt).toISOString() : '',
   };
 
-  return <SingleReelClient reelId={id} initialReel={initialReel} />;
+  return <SingleReelClient reelId={id} initialReel={JSON.parse(JSON.stringify(initialReel))} />;
 }

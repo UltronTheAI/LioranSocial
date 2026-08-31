@@ -29,15 +29,14 @@ export function SingleReelClient({
 
   const timerTriggeredRef = useRef(false);
 
-  // 1. Fetch Reel Details (Only if not provided initially or refresh needed)
+  // 1. Fetch Reel Details & Sync User Like/Save state
   useEffect(() => {
-    if (initialReel) return;
     let isMounted = true;
 
     fetch(`/api/reels/${reelId}`, { cache: 'no-store' })
       .then((res) => {
         if (res.status === 404) {
-          if (isMounted) {
+          if (isMounted && !initialReel) {
             setNotFound(true);
             setLoading(false);
           }
@@ -49,13 +48,14 @@ export function SingleReelClient({
         if (!isMounted || !data) return;
         if (data.reel) {
           setReel(data.reel);
-        } else {
+          setNotFound(false);
+        } else if (!initialReel) {
           setNotFound(true);
         }
         setLoading(false);
       })
       .catch(() => {
-        if (isMounted) {
+        if (isMounted && !initialReel) {
           setNotFound(true);
           setLoading(false);
         }

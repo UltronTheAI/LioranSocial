@@ -342,8 +342,12 @@ export function AppShell({ children }: AppShellProps) {
       {/* ========================================================================= */}
       <main
         className={cn(
-          'flex-1 min-w-0 overflow-y-auto',
-          pathname.startsWith('/messages') ? 'pb-0' : isReelsPage ? 'pb-14 md:pb-0' : 'pb-16 md:pb-0'
+          'flex-1 min-w-0',
+          isReelsPage
+            ? 'overflow-hidden pb-0'
+            : pathname.startsWith('/messages')
+            ? 'overflow-y-auto pb-0'
+            : 'overflow-y-auto pb-16 md:pb-0'
         )}
       >
         {children}

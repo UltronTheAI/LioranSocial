@@ -95,10 +95,30 @@ export default async function SinglePostPage({ params }: Props) {
     notFound();
   }
 
+  const authorDoc = post.authorId as unknown as {
+    _id?: { toString: () => string };
+    username?: string;
+    displayName?: string;
+    avatar?: string;
+    emailVerified?: boolean;
+  };
+
   const initialPost: PostCardData = {
     _id: post._id.toString(),
-    author: post.authorId as unknown as PostCardData['author'],
-    images: post.images || [],
+    author: {
+      _id: authorDoc?._id ? authorDoc._id.toString() : '',
+      username: authorDoc?.username || 'user',
+      displayName: authorDoc?.displayName || 'Creator',
+      avatar: authorDoc?.avatar || '',
+      emailVerified: Boolean(authorDoc?.emailVerified),
+    },
+    images: (post.images || []).map((img) => ({
+      publicId: img.publicId || '',
+      url: img.url || '',
+      secureUrl: img.secureUrl || img.url || '',
+      width: img.width || 1080,
+      height: img.height || 1080,
+    })),
     caption: post.caption || '',
     mentions: post.mentions || [],
     likesCount: post.likesCount || 0,
@@ -106,8 +126,8 @@ export default async function SinglePostPage({ params }: Props) {
     savesCount: post.savesCount || 0,
     isLiked: false,
     isSaved: false,
-    createdAt: post.createdAt,
+    createdAt: post.createdAt ? new Date(post.createdAt).toISOString() : '',
   };
 
-  return <SinglePostClient postId={id} initialPost={initialPost} />;
+  return <SinglePostClient postId={id} initialPost={JSON.parse(JSON.stringify(initialPost))} />;
 }

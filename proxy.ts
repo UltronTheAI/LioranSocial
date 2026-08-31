@@ -28,14 +28,15 @@ export function proxy(request: NextRequest) {
   const isAuthenticated = hasAccessToken || hasRefreshToken;
 
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
-  const isPublicPageRoute = PUBLIC_PAGE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  const isPublicPageRoute =
+    pathname === '/' || PUBLIC_PAGE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
   // If user is already authenticated and visits login/register/etc., redirect to home
   if (isAuthenticated && isAuthRoute && pathname !== '/verify') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // Allow unauthenticated visitors to view public post, reel, profile, and search pages
+  // Allow unauthenticated visitors to view home, public post, reel, profile, and search pages
   if (!isAuthenticated && isPublicPageRoute) {
     return NextResponse.next();
   }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Sparkles, Users, Loader2, PlusSquare } from 'lucide-react';
+import { Sparkles, Loader2, PlusSquare } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { StoryCirclesBar } from '@/components/story/StoryCirclesBar';
 import { PostCard, PostCardData } from '@/components/post/PostCard';
@@ -196,12 +196,18 @@ export default function HomePage() {
             </div>
 
             <div className="flex justify-center gap-3 pt-2">
-              <Link href="/search">
-                <Button variant="secondary" size="sm" leftIcon={<Users className="w-4 h-4" />}>
-                  Find People
+              <Link href="/posts">
+                <Button variant="secondary" size="sm">
+                  Explore Posts
                 </Button>
               </Link>
-              {user && (
+              {!user ? (
+                <Link href="/login">
+                  <Button variant="primary" size="sm" className="shadow-md">
+                    Log In / Sign Up
+                  </Button>
+                </Link>
+              ) : (
                 <Button
                   variant="primary"
                   size="sm"
