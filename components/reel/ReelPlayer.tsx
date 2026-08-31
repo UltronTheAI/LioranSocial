@@ -10,10 +10,10 @@ import {
   Volume2,
   VolumeX,
   Play,
-  Check,
   Eye,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { IReelVideo } from '@/models/Reel';
 
 export interface ReelData {
@@ -62,7 +62,7 @@ export function ReelPlayer({
   const [isSaved, setIsSaved] = useState(reel.isSaved);
   const [showHeartPop, setShowHeartPop] = useState(false);
   const [isCaptionExpanded, setIsCaptionExpanded] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [progress, setProgress] = useState(0);
 
   // View count threshold tracking (3s continuous playback)
@@ -186,14 +186,6 @@ export function ReelPlayer({
     }
   };
 
-  // Copy Link
-  const handleCopyLink = () => {
-    const reelUrl = `${window.location.origin}/reels#${reel._id}`;
-    navigator.clipboard.writeText(reelUrl);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-
   return (
     <div className="relative w-full max-w-sm sm:max-w-md h-[82vh] sm:h-[86vh] mx-auto bg-black rounded-2xl overflow-hidden shadow-2xl border border-[#27272a]/60 select-none flex items-center justify-center snap-center group">
       {/* Video Element */}
@@ -303,11 +295,11 @@ export function ReelPlayer({
         {/* Share Button */}
         <div className="flex flex-col items-center gap-1">
           <button
-            onClick={handleCopyLink}
+            onClick={() => setIsShareModalOpen(true)}
             className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:text-zinc-200 transition-colors focus:outline-none"
-            title="Copy reel URL"
+            title="Share reel"
           >
-            {isCopied ? <Check className="w-5 h-5 text-emerald-400" /> : <Share2 className="w-5 h-5" />}
+            <Share2 className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -344,6 +336,14 @@ export function ReelPlayer({
       <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 z-30 pointer-events-none">
         <div className="h-full bg-white transition-all duration-100" style={{ width: `${progress}%` }} />
       </div>
+
+      {/* Share to Chat Modal */}
+      <ShareToChatModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        contentType="reel"
+        contentId={reel._id}
+      />
     </div>
   );
 }

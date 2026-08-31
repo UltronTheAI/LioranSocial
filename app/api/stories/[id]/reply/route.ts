@@ -5,6 +5,10 @@ import Story from '@/models/Story';
 import StoryReply from '@/models/StoryReply';
 import { getCurrentUser } from '@/lib/auth';
 import { createStoryReplySchema } from '@/validators/story.schema';
+import {
+  findOrCreateDM,
+  persistAndBroadcastMessage,
+} from '@/services/conversation.service';
 
 export async function POST(
   req: NextRequest,
@@ -35,6 +39,7 @@ export async function POST(
       return NextResponse.json({ error: 'Story not found or expired' }, { status: 404 });
     }
 
+    // 1. Record StoryReply record
     const reply = await StoryReply.create({
       storyId: story._id,
       storyAuthorId: story.authorId,
@@ -42,6 +47,21 @@ export async function POST(
       text: parseResult.data.text,
       emoji: parseResult.data.emoji,
     });
+
+    // 2. Automatically route Story reply/reaction to DM conversation
+    try {
+      const dm = await findOrCreateDM(currentUser._id, story.authorId.toString());
+      await persistAndBroadcastMessage({
+        conversationId: dm._id,
+        senderId: currentUser._id,
+        type: 'story_reply',
+        storyId: story._id.toString(),
+        storyReaction: parseResult.data.emoji,
+        text: parseResult.data.text,
+      });
+    } catch (e) {
+      console.error('Failed to bridge story reply to DM conversation:', e);
+    }
 
     return NextResponse.json(
       {
@@ -65,4 +85,3 @@ export async function POST(
     );
   }
 }
-

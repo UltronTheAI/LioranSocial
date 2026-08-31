@@ -12,6 +12,7 @@ import {
   UserPlus,
   UserCheck,
   Settings,
+  MessageCircle,
   AlertCircle,
   Loader2,
   Play,
@@ -345,22 +346,33 @@ export default function UserProfilePage({
                     Edit Profile
                   </Button>
                 ) : (
-                  <Button
-                    variant={isFollowing ? 'secondary' : 'primary'}
-                    size="sm"
-                    isLoading={isFollowLoading}
-                    onClick={handleToggleFollow}
-                    leftIcon={
-                      isFollowing ? (
-                        <UserCheck className="w-4 h-4" />
-                      ) : (
-                        <UserPlus className="w-4 h-4" />
-                      )
-                    }
-                    className="text-xs px-5"
-                  >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </Button>
+                  <>
+                    <Button
+                      variant={isFollowing ? 'secondary' : 'primary'}
+                      size="sm"
+                      isLoading={isFollowLoading}
+                      onClick={handleToggleFollow}
+                      leftIcon={
+                        isFollowing ? (
+                          <UserCheck className="w-4 h-4" />
+                        ) : (
+                          <UserPlus className="w-4 h-4" />
+                        )
+                      }
+                      className="text-xs px-4"
+                    >
+                      {isFollowing ? 'Following' : 'Follow'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => router.push(`/messages?user=${user._id}`)}
+                      leftIcon={<MessageCircle className="w-4 h-4" />}
+                      className="text-xs px-4"
+                    >
+                      Message
+                    </Button>
+                  </>
                 )}
               </div>
             </div>

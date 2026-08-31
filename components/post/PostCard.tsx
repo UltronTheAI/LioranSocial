@@ -13,6 +13,7 @@ import {
   Send,
 } from 'lucide-react';
 import { ImageCarousel } from './ImageCarousel';
+import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { useAuth } from '@/context/AuthContext';
 import { IPostImage } from '@/models/Post';
 
@@ -65,6 +66,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
@@ -265,7 +267,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
           </button>
 
           <button
-            onClick={handleCopyLink}
+            onClick={() => setIsShareModalOpen(true)}
             className="p-1 text-zinc-300 hover:text-white transition-colors focus:outline-none"
             title="Share post"
           >
@@ -356,6 +358,14 @@ export function PostCard({ post, onOpenComments, onPostDeleted }: PostCardProps)
           )}
         </form>
       )}
+
+      {/* Share to Chat Modal */}
+      <ShareToChatModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        contentType="post"
+        contentId={post._id}
+      />
     </article>
   );
 }
