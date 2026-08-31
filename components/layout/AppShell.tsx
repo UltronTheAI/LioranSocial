@@ -345,7 +345,7 @@ export function AppShell({ children }: AppShellProps) {
           'flex-1 min-w-0',
           isReelsPage
             ? 'overflow-hidden pb-0'
-            : pathname.startsWith('/messages')
+            : pathname.startsWith('/messages') || pathname === '/'
             ? 'overflow-hidden pb-14 md:pb-0'
             : 'overflow-y-auto pb-16 md:pb-0'
         )}
