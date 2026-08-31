@@ -8,14 +8,18 @@ import {
   MessageCircle,
   Clapperboard,
   CheckCheck,
+  AtSign,
+  Reply,
+  CircleDashed,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useSocket } from '@/context/SocketContext';
 import { useAuth } from '@/context/AuthContext';
+import { NotificationType } from '@/models/Notification';
 
 interface NotificationItem {
   _id: string;
-  type: 'follow' | 'like_post' | 'like_reel' | 'comment_post' | 'comment_reel' | 'message';
+  type: NotificationType;
   sender: {
     _id: string;
     username: string;
@@ -120,7 +124,7 @@ export default function NotificationsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#27272a] pb-4 gap-3">
           <div>
             <h1 className="text-xl font-bold text-white tracking-tight">Notifications</h1>
-            <p className="text-xs text-zinc-400">Activity and interactions across your account</p>
+            <p className="text-xs text-zinc-400">Activity, mentions, and interactions</p>
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -128,7 +132,7 @@ export default function NotificationsPage() {
             <div className="flex items-center bg-[#18181b] p-1 rounded-xl border border-[#27272a]">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                   filter === 'all'
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -138,7 +142,7 @@ export default function NotificationsPage() {
               </button>
               <button
                 onClick={() => setFilter('unread')}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
                   filter === 'unread'
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-400 hover:text-zinc-200'
@@ -195,7 +199,7 @@ export default function NotificationsPage() {
               {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
             </h3>
             <p className="text-xs text-zinc-400 max-w-xs mx-auto px-4">
-              When people follow you, like your posts, or comment on your reels, you&apos;ll see them here.
+              When people follow you, like your posts, reply to your comments, or mention you, they will appear here.
             </p>
           </div>
         )}
@@ -237,11 +241,20 @@ export default function NotificationsPage() {
                         {notif.type === 'follow' && (
                           <UserPlus className="w-2.5 h-2.5 text-blue-400" />
                         )}
-                        {(notif.type === 'like_post' || notif.type === 'like_reel') && (
+                        {(notif.type === 'like_post' || notif.type === 'like_reel' || notif.type === 'like_comment' || notif.type === 'like_story') && (
                           <Heart className="w-2.5 h-2.5 text-rose-500 fill-rose-500" />
                         )}
                         {(notif.type === 'comment_post' || notif.type === 'comment_reel') && (
                           <MessageCircle className="w-2.5 h-2.5 text-emerald-400 fill-emerald-400" />
+                        )}
+                        {notif.type === 'reply_comment' && (
+                          <Reply className="w-2.5 h-2.5 text-amber-400" />
+                        )}
+                        {(notif.type === 'mention_post' || notif.type === 'mention_reel' || notif.type === 'mention_comment') && (
+                          <AtSign className="w-2.5 h-2.5 text-blue-400" />
+                        )}
+                        {notif.type === 'new_story' && (
+                          <CircleDashed className="w-2.5 h-2.5 text-amber-400" />
                         )}
                         {notif.type === 'message' && (
                           <MessageCircle className="w-2.5 h-2.5 text-purple-400" />
@@ -261,6 +274,33 @@ export default function NotificationsPage() {
                         {notif.type === 'follow' && 'started following you.'}
                         {notif.type === 'like_post' && 'liked your photo.'}
                         {notif.type === 'like_reel' && 'liked your reel.'}
+                        {notif.type === 'like_story' && 'liked your story.'}
+                        {notif.type === 'new_story' && 'added a new story.'}
+                        {notif.type === 'like_comment' && (
+                          <span>
+                            liked your comment: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>
+                          </span>
+                        )}
+                        {notif.type === 'reply_comment' && (
+                          <span>
+                            replied to your comment: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>
+                          </span>
+                        )}
+                        {notif.type === 'mention_post' && (
+                          <span>
+                            mentioned you in a post: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>
+                          </span>
+                        )}
+                        {notif.type === 'mention_reel' && (
+                          <span>
+                            mentioned you in a reel: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>
+                          </span>
+                        )}
+                        {notif.type === 'mention_comment' && (
+                          <span>
+                            mentioned you in a comment: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>
+                          </span>
+                        )}
                         {notif.type === 'comment_post' && (
                           <span>
                             commented: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>

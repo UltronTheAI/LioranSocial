@@ -1,12 +1,28 @@
 import mongoose, { Schema, Model, models, Types } from 'mongoose';
 
+export type NotificationType =
+  | 'follow'
+  | 'like_post'
+  | 'like_reel'
+  | 'like_story'
+  | 'comment_post'
+  | 'comment_reel'
+  | 'message'
+  | 'new_story'
+  | 'like_comment'
+  | 'reply_comment'
+  | 'mention_post'
+  | 'mention_reel'
+  | 'mention_comment';
+
 export interface INotification {
   _id: Types.ObjectId;
   recipientId: Types.ObjectId;
   senderId: Types.ObjectId;
-  type: 'follow' | 'like_post' | 'like_reel' | 'comment_post' | 'comment_reel' | 'message';
+  type: NotificationType;
   postId?: Types.ObjectId;
   reelId?: Types.ObjectId;
+  storyId?: Types.ObjectId;
   commentText?: string;
   isRead: boolean;
   createdAt: Date;
@@ -29,7 +45,21 @@ const NotificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: ['follow', 'like_post', 'like_reel', 'comment_post', 'comment_reel', 'message'],
+      enum: [
+        'follow',
+        'like_post',
+        'like_reel',
+        'like_story',
+        'comment_post',
+        'comment_reel',
+        'message',
+        'new_story',
+        'like_comment',
+        'reply_comment',
+        'mention_post',
+        'mention_reel',
+        'mention_comment',
+      ],
       required: true,
     },
     postId: {
@@ -39,6 +69,10 @@ const NotificationSchema = new Schema<INotification>(
     reelId: {
       type: Schema.Types.ObjectId,
       ref: 'Reel',
+    },
+    storyId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Story',
     },
     commentText: {
       type: String,
@@ -63,4 +97,3 @@ const Notification: Model<INotification> =
   models.Notification || mongoose.model<INotification>('Notification', NotificationSchema);
 
 export default Notification;
-

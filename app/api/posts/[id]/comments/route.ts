@@ -3,9 +3,9 @@ import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
 import Post from '@/models/Post';
 import Comment from '@/models/Comment';
+import CommentLike from '@/models/CommentLike';
 import { getCurrentUser } from '@/lib/auth';
-import { createCommentSchema } from '@/validators/post.schema';
-import { createNotification } from '@/services/notification.service';
+import { createNotification, sendMentionNotifications } from '@/services/notification.service';
 
 export async function GET(
   req: NextRequest,
@@ -26,13 +26,25 @@ export async function GET(
 
     const currentUser = await getCurrentUser();
 
-    const comments = await Comment.find({ postId: id })
-      .sort({ createdAt: 1 })
-      .limit(100)
+    // Fetch all comments (both top-level and replies)
+    const rawComments = await Comment.find({ postId: id })
+      .sort({ isPinned: -1, createdAt: 1 })
+      .limit(150)
       .populate('authorId', 'username displayName avatar emailVerified')
       .lean();
 
-    const formattedComments = comments
+    const commentIds = rawComments.map((c) => c._id);
+    let likedCommentIds = new Set<string>();
+
+    if (currentUser && commentIds.length > 0) {
+      const likes = await CommentLike.find({
+        userId: currentUser._id,
+        commentId: { $in: commentIds },
+      }).select('commentId').lean();
+      likedCommentIds = new Set(likes.map((l) => l.commentId.toString()));
+    }
+
+    const formattedComments = rawComments
       .filter((c) => c.authorId)
       .map((c) => {
         const author = c.authorId as unknown as {
@@ -44,9 +56,10 @@ export async function GET(
         };
         const isCommentAuthor = currentUser && author._id.toString() === currentUser._id.toString();
         const isPostAuthor = currentUser && post.authorId.toString() === currentUser._id.toString();
+        const commentIdStr = c._id.toString();
 
         return {
-          _id: c._id.toString(),
+          _id: commentIdStr,
           author: {
             _id: author._id.toString(),
             username: author.username,
@@ -54,9 +67,15 @@ export async function GET(
             avatar: author.avatar || '',
             emailVerified: author.emailVerified || false,
           },
+          parentId: c.parentId ? c.parentId.toString() : null,
           text: c.text,
+          likesCount: c.likesCount || 0,
+          isLiked: likedCommentIds.has(commentIdStr),
+          isPinned: Boolean(c.isPinned),
+          replyCount: c.replyCount || 0,
           createdAt: c.createdAt,
           canDelete: Boolean(isCommentAuthor || isPostAuthor),
+          canPin: Boolean(isPostAuthor),
         };
       });
 
@@ -89,11 +108,14 @@ export async function POST(
     }
 
     const body = await req.json();
-    const parseResult = createCommentSchema.safeParse(body);
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    const parentId = body.parentId && Types.ObjectId.isValid(body.parentId) ? body.parentId : null;
 
-    if (!parseResult.success) {
-      const firstError = parseResult.error.issues[0]?.message || 'Invalid comment text';
-      return NextResponse.json({ error: firstError }, { status: 400 });
+    if (!text || text.length > 300) {
+      return NextResponse.json(
+        { error: 'Comment must be between 1 and 300 characters.' },
+        { status: 400 }
+      );
     }
 
     await connectToDatabase();
@@ -103,26 +125,67 @@ export async function POST(
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });
     }
 
+    let parentComment = null;
+    if (parentId) {
+      parentComment = await Comment.findById(parentId);
+      if (!parentComment || parentComment.postId.toString() !== post._id.toString()) {
+        return NextResponse.json({ error: 'Parent comment not found.' }, { status: 404 });
+      }
+    }
+
     // Create comment
-    const comment = await Comment.create({
+    const comment = new Comment({
       postId: post._id,
       authorId: currentUser._id,
-      text: parseResult.data.text,
+      parentId: parentId ? new Types.ObjectId(parentId) : undefined,
+      text,
+      likesCount: 0,
+      isPinned: false,
+      replyCount: 0,
     });
+    await comment.save();
 
     // Atomically increment post comments count
     await Post.findByIdAndUpdate(post._id, {
       $inc: { commentsCount: 1 },
     });
 
-    // Send comment notification to post author
-    createNotification({
-      recipientId: post.authorId.toString(),
+    // If it is a reply, atomically increment parent's replyCount
+    if (parentId) {
+      await Comment.findByIdAndUpdate(parentId, {
+        $inc: { replyCount: 1 },
+      });
+
+      // Send reply notification to parent comment author
+      if (parentComment && parentComment.authorId.toString() !== currentUser._id.toString()) {
+        createNotification({
+          recipientId: parentComment.authorId.toString(),
+          senderId: currentUser._id,
+          type: 'reply_comment',
+          postId: post._id.toString(),
+          commentText: comment.text,
+        }).catch((e) => console.error('Reply notification error:', e));
+      }
+    } else {
+      // Send comment notification to post author (if not self)
+      createNotification({
+        recipientId: post.authorId.toString(),
+        senderId: currentUser._id,
+        type: 'comment_post',
+        postId: post._id.toString(),
+        commentText: comment.text,
+      }).catch((e) => console.error('Comment notification error:', e));
+    }
+
+    // Send mention notifications to anyone @mentioned in this comment
+    sendMentionNotifications({
+      text: comment.text,
       senderId: currentUser._id,
-      type: 'comment_post',
+      type: 'mention_comment',
       postId: post._id.toString(),
-      commentText: comment.text,
-    }).catch((e) => console.error('Notification error:', e));
+    }).catch((e) => console.error('Comment mention notification error:', e));
+
+    const isPostAuthor = post.authorId.toString() === currentUser._id.toString();
 
     return NextResponse.json(
       {
@@ -136,9 +199,15 @@ export async function POST(
             avatar: currentUser.avatar || '',
             emailVerified: currentUser.emailVerified || false,
           },
+          parentId: parentId ? parentId.toString() : null,
           text: comment.text,
+          likesCount: 0,
+          isLiked: false,
+          isPinned: false,
+          replyCount: 0,
           createdAt: comment.createdAt,
           canDelete: true,
+          canPin: isPostAuthor,
         },
       },
       { status: 201 }
@@ -151,4 +220,3 @@ export async function POST(
     );
   }
 }
-

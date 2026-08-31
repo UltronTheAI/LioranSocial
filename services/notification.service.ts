@@ -1,20 +1,22 @@
 import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
-import Notification from '@/models/Notification';
+import Notification, { NotificationType } from '@/models/Notification';
+import User from '@/models/User';
 import { emitSocketEvent } from '@/lib/socket-server';
 
 export interface CreateNotificationParams {
   recipientId: string;
   senderId: string;
-  type: 'follow' | 'like_post' | 'like_reel' | 'comment_post' | 'comment_reel' | 'message';
+  type: NotificationType;
   postId?: string;
   reelId?: string;
+  storyId?: string;
   commentText?: string;
 }
 
 export async function createNotification(params: CreateNotificationParams) {
   try {
-    if (params.recipientId === params.senderId) {
+    if (params.recipientId.toString() === params.senderId.toString()) {
       return null; // Don't notify self
     }
 
@@ -26,6 +28,7 @@ export async function createNotification(params: CreateNotificationParams) {
       type: params.type,
       postId: params.postId ? new Types.ObjectId(params.postId) : undefined,
       reelId: params.reelId ? new Types.ObjectId(params.reelId) : undefined,
+      storyId: params.storyId ? new Types.ObjectId(params.storyId) : undefined,
       commentText: params.commentText,
       isRead: false,
     });
@@ -33,7 +36,8 @@ export async function createNotification(params: CreateNotificationParams) {
     const populated = await Notification.findById(notif._id)
       .populate('senderId', 'username displayName avatar')
       .populate('postId', 'images')
-      .populate('reelId', 'video.thumbnail')
+      .populate('reelId', 'video')
+      .populate('storyId', 'media mediaType')
       .lean();
 
     if (populated) {
@@ -43,6 +47,7 @@ export async function createNotification(params: CreateNotificationParams) {
         sender: populated.senderId,
         postId: populated.postId,
         reelId: populated.reelId,
+        storyId: populated.storyId,
         commentText: populated.commentText,
         isRead: populated.isRead,
         createdAt: populated.createdAt,
@@ -53,6 +58,51 @@ export async function createNotification(params: CreateNotificationParams) {
   } catch (error) {
     console.error('Create notification error:', error);
     return null;
+  }
+}
+
+export async function sendMentionNotifications({
+  text,
+  senderId,
+  type,
+  postId,
+  reelId,
+}: {
+  text: string;
+  senderId: string;
+  type: 'mention_post' | 'mention_reel' | 'mention_comment';
+  postId?: string;
+  reelId?: string;
+}) {
+  if (!text) return;
+
+  try {
+    const rawMatches = text.match(/@([a-zA-Z0-9_]+)/g) || [];
+    const usernames = Array.from(
+      new Set(rawMatches.map((m) => m.substring(1).toLowerCase()))
+    );
+
+    if (usernames.length === 0) return;
+
+    await connectToDatabase();
+    const matchedUsers = await User.find({ username: { $in: usernames } })
+      .select('_id username')
+      .lean();
+
+    for (const user of matchedUsers) {
+      if (user._id.toString() !== senderId.toString()) {
+        await createNotification({
+          recipientId: user._id.toString(),
+          senderId,
+          type,
+          postId,
+          reelId,
+          commentText: text.slice(0, 150),
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Send mention notifications error:', error);
   }
 }
 
@@ -67,6 +117,7 @@ export async function getUserNotifications(userId: string, limit = 40) {
     .populate('senderId', 'username displayName avatar')
     .populate('postId', 'images')
     .populate('reelId', 'video')
+    .populate('storyId', 'media mediaType')
     .lean();
 
   const unreadCount = await Notification.countDocuments({
@@ -81,6 +132,7 @@ export async function getUserNotifications(userId: string, limit = 40) {
       sender: n.senderId,
       post: n.postId,
       reel: n.reelId,
+      story: n.storyId,
       commentText: n.commentText,
       isRead: n.isRead,
       createdAt: n.createdAt,
@@ -100,4 +152,3 @@ export async function markNotificationsAsRead(userId: string) {
 
   return { success: true };
 }
-

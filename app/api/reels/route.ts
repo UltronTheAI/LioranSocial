@@ -6,6 +6,7 @@ import ReelLike from '@/models/ReelLike';
 import ReelSave from '@/models/ReelSave';
 import { getCurrentUser } from '@/lib/auth';
 import { createReelSchema } from '@/validators/reel.schema';
+import { sendMentionNotifications } from '@/services/notification.service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,6 +39,14 @@ export async function POST(req: NextRequest) {
       caption,
       mentions,
     });
+
+    // Send mention notifications
+    sendMentionNotifications({
+      text: caption,
+      senderId: currentUser._id,
+      type: 'mention_reel',
+      reelId: newReel._id.toString(),
+    }).catch((e) => console.error('Reel mention notification error:', e));
 
     return NextResponse.json(
       {

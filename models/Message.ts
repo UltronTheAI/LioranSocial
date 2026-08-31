@@ -8,6 +8,17 @@ export interface IMessageMedia {
   height?: number;
 }
 
+export interface IMessageReadReceipt {
+  userId: Types.ObjectId;
+  readAt: Date;
+}
+
+export interface IMessageReaction {
+  userId: Types.ObjectId;
+  emoji: string;
+  createdAt?: Date;
+}
+
 export interface IMessage {
   _id: Types.ObjectId;
   conversationId: Types.ObjectId;
@@ -20,6 +31,9 @@ export interface IMessage {
   storyId?: Types.ObjectId;
   storyReaction?: string;
   replyTo?: Types.ObjectId;
+  reactions: IMessageReaction[];
+  deletedFor: Types.ObjectId[];
+  readBy: IMessageReadReceipt[];
   createdAt: Date;
   editedAt?: Date;
   deletedAt?: Date;
@@ -34,6 +48,22 @@ const MessageMediaSchema = new Schema<IMessageMedia>(
     height: { type: Number },
   },
   { _id: false }
+);
+
+const MessageReadReceiptSchema = new Schema<IMessageReadReceipt>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    readAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const MessageReactionSchema = new Schema<IMessageReaction>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    emoji: { type: String, required: true },
+  },
+  { _id: false, timestamps: { createdAt: true, updatedAt: false } }
 );
 
 const MessageSchema = new Schema<IMessage>(
@@ -84,6 +114,18 @@ const MessageSchema = new Schema<IMessage>(
       type: Schema.Types.ObjectId,
       ref: 'Message',
     },
+    reactions: {
+      type: [MessageReactionSchema],
+      default: [],
+    },
+    deletedFor: {
+      type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+      default: [],
+    },
+    readBy: {
+      type: [MessageReadReceiptSchema],
+      default: [],
+    },
     editedAt: {
       type: Date,
     },
@@ -103,4 +145,3 @@ const Message: Model<IMessage> =
   models.Message || mongoose.model<IMessage>('Message', MessageSchema);
 
 export default Message;
-

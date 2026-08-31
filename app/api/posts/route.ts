@@ -8,6 +8,7 @@ import Like from '@/models/Like';
 import Save from '@/models/Save';
 import { getCurrentUser } from '@/lib/auth';
 import { createPostSchema } from '@/validators/post.schema';
+import { sendMentionNotifications } from '@/services/notification.service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,6 +47,14 @@ export async function POST(req: NextRequest) {
     await User.findByIdAndUpdate(currentUser._id, {
       $inc: { postsCount: 1 },
     });
+
+    // Send mention notifications to tagged users
+    sendMentionNotifications({
+      text: caption,
+      senderId: currentUser._id,
+      type: 'mention_post',
+      postId: newPost._id.toString(),
+    }).catch((e) => console.error('Mention notification error:', e));
 
     return NextResponse.json(
       {

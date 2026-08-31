@@ -7,8 +7,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q') || '';
     const typeParam = searchParams.get('type') || 'top';
-    const type = ['top', 'users', 'posts'].includes(typeParam)
-      ? (typeParam as 'top' | 'users' | 'posts')
+    const type = ['top', 'users', 'posts', 'reels'].includes(typeParam)
+      ? (typeParam as 'top' | 'users' | 'posts' | 'reels')
       : 'top';
 
     const currentUser = await getCurrentUser();
@@ -27,4 +27,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

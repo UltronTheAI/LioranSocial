@@ -3,9 +3,12 @@ import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
 import Story from '@/models/Story';
 import StoryView from '@/models/StoryView';
+import StoryLike from '@/models/StoryLike';
 import Follow from '@/models/Follow';
 import { getCurrentUser } from '@/lib/auth';
 import { createStorySchema } from '@/validators/story.schema';
+import { emitSocketEvent } from '@/lib/socket-server';
+import { createNotification } from '@/services/notification.service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,7 +25,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: firstError }, { status: 400 });
     }
 
-    const { media, mediaType } = parseResult.data;
+    const { media, mediaType, sharedContent } = parseResult.data;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours lifetime
 
     await connectToDatabase();
@@ -31,8 +34,46 @@ export async function POST(req: NextRequest) {
       authorId: currentUser._id,
       media,
       mediaType,
+      sharedContent: sharedContent
+        ? {
+            contentType: sharedContent.contentType,
+            postId: sharedContent.postId ? new Types.ObjectId(sharedContent.postId) : undefined,
+            reelId: sharedContent.reelId ? new Types.ObjectId(sharedContent.reelId) : undefined,
+            authorUsername: sharedContent.authorUsername,
+            authorAvatar: sharedContent.authorAvatar,
+          }
+        : undefined,
+      viewsCount: 0,
+      likesCount: 0,
       expiresAt,
     });
+
+    // Notify followers and broadcast story:new in real-time
+    Follow.find({ followingId: currentUser._id })
+      .select('followerId')
+      .lean()
+      .then((follows) => {
+        follows.forEach((f) => {
+          const followerIdStr = f.followerId.toString();
+          // Emit real-time story update to follower's room
+          emitSocketEvent(`user:${followerIdStr}`, 'story:new', {
+            storyId: newStory._id.toString(),
+            authorId: currentUser._id,
+            username: currentUser.username,
+            displayName: currentUser.displayName,
+            avatar: currentUser.avatar,
+          });
+
+          // Create notification for follower
+          createNotification({
+            recipientId: followerIdStr,
+            senderId: currentUser._id,
+            type: 'new_story',
+            storyId: newStory._id.toString(),
+          }).catch((err) => console.error('Story notification error:', err));
+        });
+      })
+      .catch((err) => console.error('Fetch followers error for story:', err));
 
     return NextResponse.json(
       {
@@ -42,7 +83,10 @@ export async function POST(req: NextRequest) {
           authorId: currentUser._id,
           media: newStory.media,
           mediaType: newStory.mediaType,
+          sharedContent: newStory.sharedContent,
           viewsCount: 0,
+          likesCount: 0,
+          isLiked: false,
           expiresAt: newStory.expiresAt,
           createdAt: newStory.createdAt,
         },
@@ -90,16 +134,45 @@ export async function GET() {
       .populate('authorId', 'username displayName avatar emailVerified')
       .lean();
 
-    // Check which stories viewer has already viewed
+    // Check which stories viewer has already viewed and liked + accurate view and like counts
     let viewedStoryIds = new Set<string>();
-    if (currentUser && activeStories.length > 0) {
-      const storyIds = activeStories.map((s) => s._id);
-      const views = await StoryView.find({
-        viewerId: currentUser._id,
-        storyId: { $in: storyIds },
-      }).select('storyId').lean();
+    let likedStoryIds = new Set<string>();
+    const viewCountMap = new Map<string, number>();
+    const likeCountMap = new Map<string, number>();
 
-      viewedStoryIds = new Set(views.map((v) => v.storyId.toString()));
+    if (activeStories.length > 0) {
+      const storyIds = activeStories.map((s) => s._id);
+
+      const [viewsAgg, likesAgg] = await Promise.all([
+        StoryView.aggregate([
+          { $match: { storyId: { $in: storyIds } } },
+          { $group: { _id: '$storyId', count: { $sum: 1 } } },
+        ]),
+        StoryLike.aggregate([
+          { $match: { storyId: { $in: storyIds } } },
+          { $group: { _id: '$storyId', count: { $sum: 1 } } },
+        ]),
+      ]);
+
+      viewsAgg.forEach((v) => viewCountMap.set(v._id.toString(), v.count));
+      likesAgg.forEach((l) => likeCountMap.set(l._id.toString(), l.count));
+
+      if (currentUser) {
+        const userObjId = new Types.ObjectId(currentUser._id.toString());
+        const [myViews, myLikes] = await Promise.all([
+          StoryView.find({
+            viewerId: userObjId,
+            storyId: { $in: storyIds },
+          }).select('storyId').lean(),
+          StoryLike.find({
+            userId: userObjId,
+            storyId: { $in: storyIds },
+          }).select('storyId').lean(),
+        ]);
+
+        viewedStoryIds = new Set(myViews.map((v) => v.storyId.toString()));
+        likedStoryIds = new Set(myLikes.map((l) => l.storyId.toString()));
+      }
     }
 
     // Group stories by author
@@ -116,8 +189,17 @@ export async function GET() {
         _id: string;
         media: unknown;
         mediaType: 'image' | 'video';
+        sharedContent?: {
+          contentType: 'post' | 'reel';
+          postId?: string;
+          reelId?: string;
+          authorUsername: string;
+          authorAvatar?: string;
+        };
         viewsCount: number;
+        likesCount: number;
         hasViewed: boolean;
+        isLiked: boolean;
         expiresAt: Date;
         createdAt: Date;
       }>;
@@ -137,7 +219,12 @@ export async function GET() {
       };
       const authorIdStr = author._id.toString();
       const storyIdStr = story._id.toString();
-      const hasViewed = viewedStoryIds.has(storyIdStr);
+      const isSelf = currentUser && authorIdStr === currentUser._id.toString();
+      const hasViewed = isSelf ? true : viewedStoryIds.has(storyIdStr);
+      const isLiked = likedStoryIds.has(storyIdStr);
+
+      const actualViews = viewCountMap.get(storyIdStr) ?? (story.viewsCount || 0);
+      const actualLikes = likeCountMap.get(storyIdStr) ?? (story.likesCount || 0);
 
       if (!authorMap.has(authorIdStr)) {
         authorMap.set(authorIdStr, {
@@ -162,8 +249,19 @@ export async function GET() {
         _id: storyIdStr,
         media: story.media,
         mediaType: story.mediaType,
-        viewsCount: story.viewsCount || 0,
+        sharedContent: story.sharedContent
+          ? {
+              contentType: story.sharedContent.contentType,
+              postId: story.sharedContent.postId?.toString(),
+              reelId: story.sharedContent.reelId?.toString(),
+              authorUsername: story.sharedContent.authorUsername,
+              authorAvatar: story.sharedContent.authorAvatar,
+            }
+          : undefined,
+        viewsCount: actualViews,
+        likesCount: actualLikes,
         hasViewed,
+        isLiked,
         expiresAt: story.expiresAt,
         createdAt: story.createdAt,
       });
@@ -171,7 +269,20 @@ export async function GET() {
 
     const storyGroups = Array.from(authorMap.values());
 
-    // Sort story groups so user's own stories and unseen stories come first
+    // Final pass on hasUnseen to ensure 100% accuracy
+    storyGroups.forEach((g) => {
+      const isSelf = currentUser && g.author._id === currentUser._id.toString();
+      if (isSelf) {
+        g.hasUnseen = false;
+      } else {
+        g.hasUnseen = g.stories.some((s) => !s.hasViewed);
+      }
+    });
+
+    // Sort story groups:
+    // 1. User's own stories first
+    // 2. Unseen stories (hasUnseen: true) next, pushed to front
+    // 3. Seen stories (hasUnseen: false) last, pushed to back
     if (currentUser) {
       storyGroups.sort((a, b) => {
         const aIsSelf = a.author._id === currentUser._id.toString();
@@ -196,4 +307,3 @@ export async function GET() {
     );
   }
 }
-

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { ImageCarousel } from './ImageCarousel';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
+import { LikesListModal } from './LikesListModal';
 import { useAuth } from '@/context/AuthContext';
 import { IPostImage } from '@/models/Post';
 
@@ -58,6 +59,25 @@ function timeAgo(dateInput: string | Date): string {
   return `${Math.floor(diffInSeconds / 604800)}w`;
 }
 
+function renderTextWithMentions(text: string) {
+  const parts = text.split(/(@[a-zA-Z0-9_]+)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('@')) {
+      const username = part.slice(1);
+      return (
+        <Link
+          key={index}
+          href={`/u/${username}`}
+          className="text-blue-400 hover:underline font-semibold"
+        >
+          {part}
+        </Link>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
 export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }: PostCardProps) {
   const { user: currentUser } = useAuth();
 
@@ -78,6 +98,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [editCaptionValue, setEditCaptionValue] = useState(post.caption);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
+  const [isLikesModalOpen, setIsLikesModalOpen] = useState(false);
 
   const isAuthor = currentUser && currentUser._id.toString() === post.author._id.toString();
 
@@ -336,8 +357,18 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
       {/* ===================================================================== */}
       <div className="px-4 py-2 space-y-1.5 text-xs">
         {likesCount > 0 && (
-          <p className="font-semibold text-white">
+          <p
+            onClick={() => isAuthor && setIsLikesModalOpen(true)}
+            className={`font-semibold text-white ${
+              isAuthor ? 'hover:underline cursor-pointer' : ''
+            }`}
+          >
             {likesCount.toLocaleString()} {likesCount === 1 ? 'like' : 'likes'}
+            {isAuthor && (
+              <span className="text-[10px] text-zinc-400 font-normal ml-1.5 hover:text-white">
+                • View likes
+              </span>
+            )}
           </p>
         )}
 
@@ -379,9 +410,11 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
                 {post.author.username}
               </Link>
               <span>
-                {currentCaption.length > 120 && !isExpanded
-                  ? `${currentCaption.slice(0, 120)}...`
-                  : currentCaption}
+                {renderTextWithMentions(
+                  currentCaption.length > 120 && !isExpanded
+                    ? `${currentCaption.slice(0, 120)}...`
+                    : currentCaption
+                )}
               </span>
               {currentCaption.length > 120 && (
                 <button
@@ -437,13 +470,27 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
         </form>
       )}
 
-      {/* Share to Chat Modal */}
+      {/* Share to Chat / Story Modal */}
       <ShareToChatModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         contentType="post"
         contentId={post._id}
+        author={post.author}
+        media={post.images[0]}
+        mediaType="image"
       />
+
+      {/* Author Likes Modal */}
+      {isAuthor && (
+        <LikesListModal
+          isOpen={isLikesModalOpen}
+          onClose={() => setIsLikesModalOpen(false)}
+          targetId={post._id}
+          type="post"
+          title="Liked by"
+        />
+      )}
     </article>
   );
 }

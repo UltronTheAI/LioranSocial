@@ -40,7 +40,7 @@ export default function UserProfilePage({
   params: Promise<{ username: string }>;
 }) {
   const resolvedParams = use(params);
-  const username = resolvedParams.username;
+  const username = decodeURIComponent(resolvedParams.username || '').toLowerCase().trim();
 
   const { user: currentUser } = useAuth();
   const router = useRouter();
@@ -65,14 +65,15 @@ export default function UserProfilePage({
   const [followModalMode, setFollowModalMode] = useState<'followers' | 'following' | null>(null);
 
   const fetchProfileData = useCallback(async () => {
+    if (!username) return { notFound: true, profile: null };
     try {
-      const res = await fetch(`/api/users/${username}`, { cache: 'no-store' });
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { cache: 'no-store' });
       if (res.status === 404) {
         return { notFound: true, profile: null };
       }
 
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.user) {
         return { notFound: false, profile: data };
       }
       return { notFound: true, profile: null };
@@ -82,8 +83,9 @@ export default function UserProfilePage({
   }, [username]);
 
   const fetchUserPostsData = useCallback(async () => {
+    if (!username) return [];
     try {
-      const res = await fetch(`/api/users/${username}/posts?limit=30`, { cache: 'no-store' });
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}/posts?limit=30`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
         return data.posts || [];
@@ -96,8 +98,9 @@ export default function UserProfilePage({
   }, [username]);
 
   const fetchUserReelsData = useCallback(async () => {
+    if (!username) return [];
     try {
-      const res = await fetch(`/api/users/${username}/reels?limit=30`, { cache: 'no-store' });
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}/reels?limit=30`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
         return data.reels || [];
@@ -110,9 +113,9 @@ export default function UserProfilePage({
   }, [username]);
 
   const fetchSavedData = useCallback(async () => {
-    if (!profile?.isSelf) return { posts: [], reels: [] };
+    if (!username || !profile?.isSelf) return { posts: [], reels: [] };
     try {
-      const res = await fetch(`/api/users/${username}/saved?limit=50`, { cache: 'no-store' });
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}/saved?limit=50`, { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
         return { posts: data.posts || [], reels: data.reels || [] };
@@ -124,8 +127,10 @@ export default function UserProfilePage({
     }
   }, [username, profile?.isSelf]);
 
+  // When username changes, fetch profile data
   useEffect(() => {
     let isMounted = true;
+
     fetchProfileData().then((result) => {
       if (isMounted) {
         setProfile(result.profile);
@@ -137,8 +142,9 @@ export default function UserProfilePage({
     return () => {
       isMounted = false;
     };
-  }, [fetchProfileData]);
+  }, [username, fetchProfileData]);
 
+  // Fetch active tab media
   useEffect(() => {
     let isMounted = true;
 
@@ -169,7 +175,7 @@ export default function UserProfilePage({
     return () => {
       isMounted = false;
     };
-  }, [activeTab, fetchUserPostsData, fetchUserReelsData, fetchSavedData]);
+  }, [username, activeTab, fetchUserPostsData, fetchUserReelsData, fetchSavedData]);
 
   const refreshProfile = useCallback(async () => {
     const result = await fetchProfileData();
@@ -180,7 +186,7 @@ export default function UserProfilePage({
 
   const handleToggleFollow = async () => {
     if (!currentUser) {
-      router.push(`/login?callbackUrl=/u/${username}`);
+      router.push(`/login?callbackUrl=/u/${encodeURIComponent(username)}`);
       return;
     }
     if (!profile) return;
@@ -202,7 +208,7 @@ export default function UserProfilePage({
     });
 
     try {
-      const res = await fetch(`/api/users/${username}/follow`, {
+      const res = await fetch(`/api/users/${encodeURIComponent(username)}/follow`, {
         method: 'POST',
       });
       const data = await res.json();

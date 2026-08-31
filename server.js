@@ -30,7 +30,7 @@ function parseCookies(cookieHeader) {
 async function verifyToken(token) {
   try {
     const secretKey = new TextEncoder().encode(
-      process.env.JWT_SECRET || 'your_super_secret_jwt_access_token_key_min_32_chars'
+      process.env.JWT_SECRET || 'default_jwt_secret_change_me_in_production_min32'
     );
     const { payload } = await jwtVerify(token, secretKey);
     return payload;
@@ -60,20 +60,24 @@ app.prepare().then(() => {
     try {
       const cookieHeader = socket.handshake.headers.cookie;
       const cookies = parseCookies(cookieHeader);
-      const token = socket.handshake.auth?.token || cookies.accessToken;
+      const token =
+        socket.handshake.auth?.token ||
+        cookies.lioran_access_token ||
+        cookies.accessToken;
 
       if (!token) {
         return next(new Error('Authentication required'));
       }
 
       const payload = await verifyToken(token);
-      if (!payload || !payload.sub) {
+      const userId = payload?.sub || payload?.userId;
+      if (!payload || !userId) {
         return next(new Error('Invalid or expired authentication token'));
       }
 
-      // Securely attach authenticated user (never trust client-supplied ID)
+      // Securely attach authenticated user
       socket.data.user = {
-        _id: payload.sub,
+        _id: userId.toString(),
         username: payload.username,
         email: payload.email,
       };
@@ -88,8 +92,9 @@ app.prepare().then(() => {
     const user = socket.data.user;
     if (!user) return;
 
-    // Join private user room for personal notifications
+    // Automatically join private user room for live notifications and alerts
     socket.join(`user:${user._id}`);
+    console.log(`[Socket] User connected: ${user.username} (${user._id}) -> room user:${user._id}`);
 
     // Join conversation room
     socket.on('conversation:join', (conversationId) => {
@@ -105,7 +110,7 @@ app.prepare().then(() => {
       }
     });
 
-    // Ephemeral typing start (in-memory only, no DB writes)
+    // Realtime typing start
     socket.on('typing:start', ({ conversationId }) => {
       if (conversationId) {
         socket.to(`conversation:${conversationId}`).emit('typing:start', {
@@ -116,7 +121,7 @@ app.prepare().then(() => {
       }
     });
 
-    // Ephemeral typing stop (in-memory only, no DB writes)
+    // Realtime typing stop
     socket.on('typing:stop', ({ conversationId }) => {
       if (conversationId) {
         socket.to(`conversation:${conversationId}`).emit('typing:stop', {
@@ -126,8 +131,20 @@ app.prepare().then(() => {
       }
     });
 
+    // Realtime message seen / read
+    socket.on('message:read', ({ conversationId, messageIds }) => {
+      if (conversationId) {
+        socket.to(`conversation:${conversationId}`).emit('message:read', {
+          conversationId,
+          userId: user._id,
+          messageIds,
+          readAt: new Date().toISOString(),
+        });
+      }
+    });
+
     socket.on('disconnect', () => {
-      // Clean up automatically handled by socket.io rooms
+      // Automatic cleanup handled by socket.io
     });
   });
 

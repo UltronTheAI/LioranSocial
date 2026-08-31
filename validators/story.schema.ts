@@ -8,9 +8,18 @@ export const storyMediaSchema = z.object({
   height: z.number().optional(),
 });
 
+export const storySharedContentSchema = z.object({
+  contentType: z.enum(['post', 'reel']),
+  postId: z.string().optional(),
+  reelId: z.string().optional(),
+  authorUsername: z.string(),
+  authorAvatar: z.string().optional(),
+});
+
 export const createStorySchema = z.object({
   media: storyMediaSchema,
   mediaType: z.enum(['image', 'video']),
+  sharedContent: storySharedContentSchema.optional(),
 });
 
 export const createStoryReplySchema = z.object({
@@ -22,4 +31,3 @@ export const createStoryReplySchema = z.object({
 
 export type CreateStoryInput = z.infer<typeof createStorySchema>;
 export type CreateStoryReplyInput = z.infer<typeof createStoryReplySchema>;
-

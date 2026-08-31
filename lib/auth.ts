@@ -32,6 +32,7 @@ const encodedJwtSecret = new TextEncoder().encode(JWT_SECRET);
 export async function createAccessToken(payload: AccessTokenPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(payload.userId)
     .setIssuedAt()
     .setExpirationTime(ACCESS_TOKEN_EXPIRY)
     .sign(encodedJwtSecret);

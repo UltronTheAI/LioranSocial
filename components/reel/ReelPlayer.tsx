@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
+import { LikesListModal } from '@/components/post/LikesListModal';
 import { IReelVideo } from '@/models/Reel';
 
 export interface ReelData {
@@ -51,6 +52,25 @@ export interface ReelPlayerProps {
   onReelDeleted?: (reelId: string) => void;
 }
 
+function renderTextWithMentions(text: string) {
+  const parts = text.split(/(@[a-zA-Z0-9_]+)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('@')) {
+      const username = part.slice(1);
+      return (
+        <Link
+          key={index}
+          href={`/u/${username}`}
+          className="text-blue-400 hover:underline font-semibold"
+        >
+          {part}
+        </Link>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
+
 export function ReelPlayer({
   reel,
   isActive,
@@ -78,6 +98,7 @@ export function ReelPlayer({
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const [editCaptionValue, setEditCaptionValue] = useState(reel.caption);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
+  const [isLikesModalOpen, setIsLikesModalOpen] = useState(false);
 
   const isAuthor = currentUser && currentUser._id.toString() === reel.author._id.toString();
 
@@ -310,19 +331,26 @@ export function ReelPlayer({
             reel.author.displayName?.charAt(0).toUpperCase() || 'U'
           )}
         </Link>
-
         {/* Like Button */}
         <div className="flex flex-col items-center gap-0.5">
           <button
             onClick={handleToggleLike}
-            className={`p-2 rounded-full bg-black/40 backdrop-blur-md transition-transform active:scale-125 focus:outline-none cursor-pointer ${
+            className={`p-2 rounded-full bg-black/40 backdrop-blur-md transition-colors focus:outline-none cursor-pointer ${
               isLiked ? 'text-rose-500 fill-rose-500' : 'text-white hover:text-zinc-200'
             }`}
             aria-label={isLiked ? 'Unlike' : 'Like'}
           >
             <Heart className={`w-6 h-6 ${isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
           </button>
-          <span className="text-[11px] font-bold drop-shadow-md">{likesCount}</span>
+          <span
+            onClick={() => isAuthor && setIsLikesModalOpen(true)}
+            className={`text-[11px] font-bold drop-shadow-md ${
+              isAuthor ? 'hover:underline cursor-pointer hover:text-rose-300' : ''
+            }`}
+            title={isAuthor ? 'View likes' : undefined}
+          >
+            {likesCount}
+          </span>
         </div>
 
         {/* Comment Button */}
@@ -382,6 +410,16 @@ export function ReelPlayer({
               </button>
               {isAuthor && (
                 <>
+                  <button
+                    onClick={() => {
+                      setIsLikesModalOpen(true);
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                    View likes
+                  </button>
                   <button
                     onClick={() => {
                       setIsEditingCaption(true);
@@ -449,9 +487,11 @@ export function ReelPlayer({
           currentCaption && (
             <div className="pointer-events-auto text-xs text-zinc-100 leading-snug break-words">
               <span>
-                {currentCaption.length > 80 && !isCaptionExpanded
-                  ? `${currentCaption.slice(0, 80)}...`
-                  : currentCaption}
+                {renderTextWithMentions(
+                  currentCaption.length > 80 && !isCaptionExpanded
+                    ? `${currentCaption.slice(0, 80)}...`
+                    : currentCaption
+                )}
               </span>
               {currentCaption.length > 80 && (
                 <button
@@ -472,13 +512,27 @@ export function ReelPlayer({
         <div className="h-full bg-white transition-all duration-100" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* Share to Chat Modal */}
+      {/* Share to Chat / Story Modal */}
       <ShareToChatModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         contentType="reel"
         contentId={reel._id}
+        author={reel.author}
+        media={reel.video}
+        mediaType="video"
       />
+
+      {/* Author Reel Likes Modal */}
+      {isAuthor && (
+        <LikesListModal
+          isOpen={isLikesModalOpen}
+          onClose={() => setIsLikesModalOpen(false)}
+          targetId={reel._id}
+          type="reel"
+          title="Reel Likes"
+        />
+      )}
     </div>
   );
 }

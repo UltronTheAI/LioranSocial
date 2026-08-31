@@ -87,10 +87,46 @@ function MessagesContent() {
     setActiveConversationId(newConv._id);
   };
 
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setConversations((prev) => prev.filter((c) => c._id !== conversationId));
+        if (activeConversationId === conversationId) {
+          setActiveConversationId(null);
+        }
+      }
+    } catch (err) {
+      console.error('Delete conversation error:', err);
+    }
+  };
+
+  const handleBulkDeleteConversations = async (conversationIds: string[]) => {
+    try {
+      const res = await fetch('/api/conversations/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationIds }),
+      });
+      if (res.ok) {
+        setConversations((prev) =>
+          prev.filter((c) => !conversationIds.includes(c._id))
+        );
+        if (activeConversationId && conversationIds.includes(activeConversationId)) {
+          setActiveConversationId(null);
+        }
+      }
+    } catch (err) {
+      console.error('Bulk delete error:', err);
+    }
+  };
+
   const activeConversation = conversations.find((c) => c._id === activeConversationId) || null;
 
   return (
-    <div className="h-[calc(100vh-4rem)] md:h-screen flex overflow-hidden">
+    <div className="h-[calc(100dvh-3.5rem)] md:h-screen flex overflow-hidden">
       {/* Left Column: Conversation List */}
       <div
         className={`w-full md:w-80 lg:w-96 h-full shrink-0 ${
@@ -102,6 +138,8 @@ function MessagesContent() {
           activeConversationId={activeConversationId}
           onSelectConversation={(id) => setActiveConversationId(id)}
           onConversationCreated={handleConversationCreated}
+          onDeleteConversation={handleDeleteConversation}
+          onBulkDeleteConversations={handleBulkDeleteConversations}
           loading={loading}
         />
       </div>

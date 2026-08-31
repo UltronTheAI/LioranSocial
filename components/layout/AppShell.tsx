@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -20,6 +20,7 @@ import { CreatePostModal } from '@/components/post/CreatePostModal';
 import { CreateReelModal } from '@/components/reel/CreateReelModal';
 import { CreateStoryModal } from '@/components/story/CreateStoryModal';
 import { PostCardData } from '@/components/post/PostCard';
+import { LiveNotificationToast } from '@/components/notifications/LiveNotificationToast';
 import { cn } from '@/lib/utils';
 
 export interface AppShellProps {
@@ -36,6 +37,38 @@ export function AppShell({ children }: AppShellProps) {
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isCreateReelOpen, setIsCreateReelOpen] = useState(false);
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
+
+  // Unread badge counters
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+
+  // Fetch initial unread counts
+  useEffect(() => {
+    if (!user) return;
+
+    fetch('/api/notifications')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.unreadCount) {
+          setUnreadNotifCount(data.unreadCount);
+        }
+      })
+      .catch(() => {});
+
+    const handleNotifInc = () => setUnreadNotifCount((prev) => prev + 1);
+    const handleMsgInc = () => setUnreadMsgCount((prev) => prev + 1);
+
+    window.addEventListener('notifications:unread_increment', handleNotifInc);
+    window.addEventListener('messages:unread_increment', handleMsgInc);
+
+    return () => {
+      window.removeEventListener('notifications:unread_increment', handleNotifInc);
+      window.removeEventListener('messages:unread_increment', handleMsgInc);
+    };
+  }, [user]);
+
+  const effectiveUnreadNotifCount = pathname.startsWith('/notifications') ? 0 : unreadNotifCount;
+  const effectiveUnreadMsgCount = pathname.startsWith('/messages') ? 0 : unreadMsgCount;
 
   const profileHref = user?.username ? `/u/${user.username}` : '/login';
 
@@ -65,6 +98,9 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   const handleStoryCreated = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('story:refresh'));
+    }
     if (pathname === '/') {
       window.location.reload();
     } else {
@@ -77,9 +113,19 @@ export function AppShell({ children }: AppShellProps) {
     { label: 'Home', href: '/', icon: Home },
     { label: 'Search', href: '/search', icon: Search },
     { label: 'Reels', href: '/reels', icon: Clapperboard },
-    { label: 'Messages', href: '/messages', icon: MessageCircle },
+    {
+      label: 'Messages',
+      href: '/messages',
+      icon: MessageCircle,
+      badge: effectiveUnreadMsgCount > 0 ? effectiveUnreadMsgCount : null,
+    },
     { label: 'Create', href: '#create', icon: PlusSquare, onClick: handleCreateClick },
-    { label: 'Notifications', href: '/notifications', icon: Heart },
+    {
+      label: 'Notifications',
+      href: '/notifications',
+      icon: Heart,
+      badge: effectiveUnreadNotifCount > 0 ? effectiveUnreadNotifCount : null,
+    },
     { label: 'Profile', href: profileHref, icon: UserIcon },
   ];
 
@@ -94,6 +140,9 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex flex-col md:flex-row">
+      {/* Global Live Notification Toaster */}
+      <LiveNotificationToast />
+
       {/* ========================================================================= */}
       {/* Desktop Sidebar (Left) */}
       {/* ========================================================================= */}
@@ -142,7 +191,7 @@ export function AppShell({ children }: AppShellProps) {
                             setShowCreateMenu(false);
                             setIsCreatePostOpen(true);
                           }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors cursor-pointer"
                         >
                           <ImageIcon className="w-4 h-4 text-emerald-400" />
                           <span>Photo Post</span>
@@ -152,7 +201,7 @@ export function AppShell({ children }: AppShellProps) {
                             setShowCreateMenu(false);
                             setIsCreateReelOpen(true);
                           }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors cursor-pointer"
                         >
                           <Clapperboard className="w-4 h-4 text-rose-400" />
                           <span>Video Reel</span>
@@ -162,7 +211,7 @@ export function AppShell({ children }: AppShellProps) {
                             setShowCreateMenu(false);
                             setIsCreateStoryOpen(true);
                           }}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-[#27272a]/60 text-left transition-colors cursor-pointer"
                         >
                           <CircleDashed className="w-4 h-4 text-amber-400" />
                           <span>24h Story</span>
@@ -178,14 +227,27 @@ export function AppShell({ children }: AppShellProps) {
                   key={item.label}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-4 px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150',
+                    'flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium transition-all duration-150',
                     isActive
                       ? 'bg-[#18181b] text-white font-semibold shadow-sm'
                       : 'text-zinc-400 hover:text-white hover:bg-[#121215]'
                   )}
                 >
-                  <Icon className={cn('w-5 h-5', isActive ? 'text-white' : 'text-zinc-400')} />
-                  <span>{item.label}</span>
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="relative">
+                      <Icon className={cn('w-5 h-5', isActive ? 'text-white' : 'text-zinc-400')} />
+                      {item.badge && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#09090b]" />
+                      )}
+                    </div>
+                    <span className="truncate">{item.label}</span>
+                  </div>
+
+                  {item.badge && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -215,7 +277,7 @@ export function AppShell({ children }: AppShellProps) {
               <button
                 onClick={() => logout()}
                 title="Sign out"
-                className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors"
+                className="p-2 text-zinc-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -231,7 +293,7 @@ export function AppShell({ children }: AppShellProps) {
           ) : (
             <Link
               href="/login"
-              className="w-full block py-2 text-center text-sm font-medium bg-white text-zinc-950 rounded-xl"
+              className="w-full block py-2 text-center text-sm font-medium bg-white text-zinc-950 rounded-xl cursor-pointer"
             >
               Sign In
             </Link>
@@ -250,15 +312,21 @@ export function AppShell({ children }: AppShellProps) {
           <span className="font-bold tracking-tight text-white text-base">LioranSocial</span>
         </Link>
         <div className="flex items-center gap-2">
-          <Link href="/notifications" className="p-2 text-zinc-400 hover:text-white">
+          <Link href="/notifications" className="p-2 text-zinc-400 hover:text-white relative">
             <Heart className="w-5 h-5" />
+            {effectiveUnreadNotifCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-[#09090b]" />
+            )}
           </Link>
-          <Link href="/messages" className="p-2 text-zinc-400 hover:text-white">
+          <Link href="/messages" className="p-2 text-zinc-400 hover:text-white relative">
             <MessageCircle className="w-5 h-5" />
+            {effectiveUnreadMsgCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-[#09090b]" />
+            )}
           </Link>
           <button
             onClick={() => logout()}
-            className="p-2 text-zinc-400 hover:text-rose-400"
+            className="p-2 text-zinc-400 hover:text-rose-400 cursor-pointer"
             title="Log out"
           >
             <LogOut className="w-5 h-5" />
@@ -269,97 +337,104 @@ export function AppShell({ children }: AppShellProps) {
       {/* ========================================================================= */}
       {/* Main Content Area */}
       {/* ========================================================================= */}
-      <main className="flex-1 min-w-0 pb-16 md:pb-0 overflow-y-auto">
+      <main
+        className={cn(
+          'flex-1 min-w-0 overflow-y-auto',
+          pathname.startsWith('/messages') ? 'pb-0' : 'pb-16 md:pb-0'
+        )}
+      >
         {children}
       </main>
 
       {/* ========================================================================= */}
       {/* Mobile Bottom Navigation Bar */}
       {/* ========================================================================= */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a] px-2 py-2 flex items-center justify-around z-30">
-        {mobileNavItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.href === '/'
-              ? pathname === '/'
-              : item.href !== '#create' && pathname.startsWith(item.href);
+      {!pathname.startsWith('/messages') && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#09090b]/95 backdrop-blur-md border-t border-[#27272a] px-2 py-2 flex items-center justify-around z-30">
+          {mobileNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive =
+              item.href === '/'
+                ? pathname === '/'
+                : item.href !== '#create' && pathname.startsWith(item.href);
 
-          if (item.onClick) {
-            return (
-              <div key={item.label} className="relative">
-                <button
-                  onClick={item.onClick}
-                  className="p-2.5 rounded-xl text-zinc-400 hover:text-white transition-colors"
-                  aria-label={item.label}
-                >
-                  <Icon className="w-5 h-5" />
-                </button>
+            if (item.onClick) {
+              return (
+                <div key={item.label} className="relative">
+                  <button
+                    onClick={item.onClick}
+                    className="p-2.5 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    aria-label={item.label}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </button>
 
-                {/* Mobile Create Popup */}
-                {showCreateMenu && (
-                  <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end justify-center p-4">
-                    <div className="w-full max-w-xs bg-[#18181b] border border-[#27272a] rounded-3xl p-3 shadow-2xl space-y-1 mb-16 animate-in slide-in-from-bottom duration-150">
-                      <div className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                        Create
+                  {/* Mobile Create Popup */}
+                  {showCreateMenu && (
+                    <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end justify-center p-4">
+                      <div className="w-full max-w-xs bg-[#18181b] border border-[#27272a] rounded-3xl p-3 shadow-2xl space-y-1 mb-16 animate-in slide-in-from-bottom duration-150">
+                        <div className="px-3 py-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                          Create
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowCreateMenu(false);
+                            setIsCreatePostOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
+                        >
+                          <ImageIcon className="w-4 h-4 text-emerald-400" />
+                          <span>Photo Post</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCreateMenu(false);
+                            setIsCreateReelOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
+                        >
+                          <Clapperboard className="w-4 h-4 text-rose-400" />
+                          <span>Video Reel</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowCreateMenu(false);
+                            setIsCreateStoryOpen(true);
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors cursor-pointer"
+                        >
+                          <CircleDashed className="w-4 h-4 text-amber-400" />
+                          <span>24h Story</span>
+                        </button>
+                        <button
+                          onClick={() => setShowCreateMenu(false)}
+                          className="w-full py-2.5 text-center text-xs font-bold text-zinc-400 hover:text-white cursor-pointer"
+                        >
+                          Cancel
+                        </button>
                       </div>
-                      <button
-                        onClick={() => {
-                          setShowCreateMenu(false);
-                          setIsCreatePostOpen(true);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors"
-                      >
-                        <ImageIcon className="w-4 h-4 text-emerald-400" />
-                        <span>Photo Post</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowCreateMenu(false);
-                          setIsCreateReelOpen(true);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors"
-                      >
-                        <Clapperboard className="w-4 h-4 text-rose-400" />
-                        <span>Video Reel</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowCreateMenu(false);
-                          setIsCreateStoryOpen(true);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-xs font-medium text-zinc-100 hover:bg-[#27272a] transition-colors"
-                      >
-                        <CircleDashed className="w-4 h-4 text-amber-400" />
-                        <span>24h Story</span>
-                      </button>
-                      <button
-                        onClick={() => setShowCreateMenu(false)}
-                        className="w-full py-2.5 text-center text-xs font-bold text-zinc-400 hover:text-white"
-                      >
-                        Cancel
-                      </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
-          }
+                  )}
+                </div>
+              );
+            }
 
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={cn(
-                'p-2.5 rounded-xl transition-colors',
-                isActive ? 'text-white bg-[#18181b]' : 'text-zinc-400 hover:text-white'
-              )}
-              aria-label={item.label}
-            >
-              <Icon className="w-5 h-5" />
-            </Link>
-          );
-        })}
-      </nav>
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={cn(
+                  'p-2.5 rounded-xl transition-colors',
+                  isActive ? 'text-white bg-[#18181b]' : 'text-zinc-400 hover:text-white'
+                )}
+                aria-label={item.label}
+              >
+                <Icon className="w-5 h-5" />
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
       {/* Global Creation Modals */}
       <CreatePostModal
