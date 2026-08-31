@@ -248,8 +248,8 @@ export function ShareToChatModal({
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const shareUrl =
       contentType === 'reel'
-        ? `${origin}/reels#${contentId}`
-        : `${origin}/`;
+        ? `${origin}/reels/${contentId}`
+        : `${origin}/p/${contentId}`;
 
     navigator.clipboard.writeText(shareUrl);
     setCopiedToast(true);

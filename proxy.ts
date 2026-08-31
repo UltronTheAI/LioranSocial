@@ -5,6 +5,16 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/constants';
 const AUTH_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password', '/verify'];
 const PUBLIC_PREFIXES = ['/api', '/_next', '/favicon.ico', '/public'];
 
+// Publicly accessible pages without requiring login
+const PUBLIC_PAGE_PREFIXES = [
+  '/p/',
+  '/posts/',
+  '/reels',
+  '/r/',
+  '/u/',
+  '/search',
+];
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -18,13 +28,19 @@ export function proxy(request: NextRequest) {
   const isAuthenticated = hasAccessToken || hasRefreshToken;
 
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route));
+  const isPublicPageRoute = PUBLIC_PAGE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
   // If user is already authenticated and visits login/register/etc., redirect to home
   if (isAuthenticated && isAuthRoute && pathname !== '/verify') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  // If user is not authenticated and visits a protected page route, redirect to login
+  // Allow unauthenticated visitors to view public post, reel, profile, and search pages
+  if (!isAuthenticated && isPublicPageRoute) {
+    return NextResponse.next();
+  }
+
+  // If user is not authenticated and visits a protected route, redirect to login
   if (!isAuthenticated && !isAuthRoute) {
     const loginUrl = new URL('/login', request.url);
     if (pathname !== '/') {

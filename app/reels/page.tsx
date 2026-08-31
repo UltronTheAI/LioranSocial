@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Sparkles, Clapperboard, Plus, Loader2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ReelPlayer, ReelData } from '@/components/reel/ReelPlayer';
 import { ReelCommentDrawer } from '@/components/reel/ReelCommentDrawer';
 import { CreateReelModal } from '@/components/reel/CreateReelModal';
+import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
@@ -39,11 +41,13 @@ function ReelsContent() {
   // Modals & Drawers
   const [commentDrawerReelId, setCommentDrawerReelId] = useState<string | null>(null);
   const [isCreateReelOpen, setIsCreateReelOpen] = useState(false);
+  const [isGuestAuthOpen, setIsGuestAuthOpen] = useState(false);
 
-  // Refs for snap container and item observers
+  // Refs for snap container, item observers, and guest timer
   const containerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const initialScrolledRef = useRef(false);
+  const guestTimerTriggeredRef = useRef(false);
 
   // Get target reel ID from query or hash
   const getTargetReelId = useCallback((): string | null => {
@@ -86,6 +90,20 @@ function ReelsContent() {
       isMounted = false;
     };
   }, []);
+
+  // 10-second Guest Timer to Show Login Option
+  useEffect(() => {
+    if (currentUser || guestTimerTriggeredRef.current) return;
+
+    const timer = setTimeout(() => {
+      if (!currentUser && !guestTimerTriggeredRef.current) {
+        guestTimerTriggeredRef.current = true;
+        setIsGuestAuthOpen(true);
+      }
+    }, 10000); // 10s of watching reels
+
+    return () => clearTimeout(timer);
+  }, [currentUser]);
 
   // Handle deep-linking to target reel B (e.g. /reels#<id> or /reels?id=<id>)
   useEffect(() => {
@@ -235,10 +253,12 @@ function ReelsContent() {
     );
   };
 
+  const activeReel = reels[activeReelIndex];
+
   return (
     <div className="relative h-[calc(100dvh-3.5rem)] md:h-screen overflow-hidden flex flex-col items-center justify-center select-none bg-[#09090b]">
-      {/* Floating Create Reel Button */}
-      {currentUser && (
+      {/* Floating Create Reel Button (Logged-in) or Log In/Sign Up (Guest) */}
+      {currentUser ? (
         <button
           onClick={() => setIsCreateReelOpen(true)}
           className="absolute top-4 right-4 md:right-8 z-30 flex items-center gap-2 bg-white text-zinc-950 font-bold px-3.5 py-2 rounded-xl text-xs hover:bg-zinc-200 transition-all shadow-2xl hover:scale-105 cursor-pointer"
@@ -246,6 +266,19 @@ function ReelsContent() {
           <Plus className="w-4 h-4 stroke-[3]" />
           <span>Create Reel</span>
         </button>
+      ) : (
+        <div className="absolute top-4 right-4 md:right-8 z-30 flex items-center gap-2">
+          <Link href="/login?callbackUrl=/reels">
+            <Button variant="secondary" size="sm" className="text-xs px-3 py-1 h-8 font-bold bg-black/60 border border-white/20 backdrop-blur-md text-white">
+              Log In
+            </Button>
+          </Link>
+          <Link href="/register?callbackUrl=/reels">
+            <Button variant="primary" size="sm" className="text-xs px-3 py-1 h-8 font-bold shadow-lg">
+              Sign Up
+            </Button>
+          </Link>
+        </div>
       )}
 
       {/* Loading State */}
@@ -306,7 +339,13 @@ function ReelsContent() {
                 isActive={idx === activeReelIndex}
                 isMuted={isMuted}
                 onToggleMute={() => setIsMuted(!isMuted)}
-                onOpenComments={(id) => setCommentDrawerReelId(id)}
+                onOpenComments={(id) => {
+                  if (!currentUser) {
+                    setIsGuestAuthOpen(true);
+                  } else {
+                    setCommentDrawerReelId(id);
+                  }
+                }}
                 onReelDeleted={handleReelDeleted}
               />
             </div>
@@ -343,6 +382,22 @@ function ReelsContent() {
         isOpen={isCreateReelOpen}
         onClose={() => setIsCreateReelOpen(false)}
         onReelCreated={handleReelCreated}
+      />
+
+      {/* Guest 10s Timer & Interaction Login Modal */}
+      <GuestAuthGateModal
+        isOpen={isGuestAuthOpen}
+        onClose={() => setIsGuestAuthOpen(false)}
+        author={
+          activeReel
+            ? {
+                username: activeReel.author.username,
+                displayName: activeReel.author.displayName,
+                avatar: activeReel.author.avatar,
+                emailVerified: activeReel.author.emailVerified,
+              }
+            : undefined
+        }
       />
     </div>
   );

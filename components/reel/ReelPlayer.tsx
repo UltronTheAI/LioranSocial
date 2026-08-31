@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { LikesListModal } from '@/components/post/LikesListModal';
+import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { IReelVideo } from '@/models/Reel';
 
 export interface ReelData {
@@ -93,6 +94,7 @@ export function ReelPlayer({
   const [progress, setProgress] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isGuestAuthModalOpen, setIsGuestAuthModalOpen] = useState(false);
 
   // Edit Caption state
   const [isEditingCaption, setIsEditingCaption] = useState(false);
@@ -163,11 +165,13 @@ export function ReelPlayer({
   const handleTimeUpdate = () => {
     const video = videoRef.current;
     if (!video || !video.duration) return;
-    setProgress((video.currentTime / video.duration) * 100);
+    const currentProgress = (video.currentTime / video.duration) * 100;
+    setProgress(currentProgress);
   };
 
   // Tap video to play/pause
-  const handleVideoTap = () => {
+  const handleVideoTap = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     const video = videoRef.current;
     if (!video) return;
 
@@ -175,14 +179,17 @@ export function ReelPlayer({
       video.pause();
       setIsPlaying(false);
     } else {
-      video.play();
+      video.play().catch(() => {});
       setIsPlaying(true);
     }
   };
 
   // Like Toggle
   const handleToggleLike = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setIsGuestAuthModalOpen(true);
+      return;
+    }
     const nextLiked = !isLiked;
     setIsLiked(nextLiked);
     setLikesCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
@@ -202,6 +209,10 @@ export function ReelPlayer({
 
   // Double tap to like
   const handleDoubleTap = () => {
+    if (!currentUser) {
+      setIsGuestAuthModalOpen(true);
+      return;
+    }
     if (!isLiked) {
       handleToggleLike();
     }
@@ -211,7 +222,10 @@ export function ReelPlayer({
 
   // Save / Bookmark Toggle
   const handleToggleSave = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setIsGuestAuthModalOpen(true);
+      return;
+    }
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
 
@@ -226,9 +240,9 @@ export function ReelPlayer({
     }
   };
 
-  // Copy Link
+  // Copy Link (Standard /reels/[id] share link)
   const handleCopyLink = () => {
-    const reelUrl = `${window.location.origin}/reels#${reel._id}`;
+    const reelUrl = `${window.location.origin}/reels/${reel._id}`;
     navigator.clipboard.writeText(reelUrl);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
@@ -537,6 +551,18 @@ export function ReelPlayer({
           title="Reel Likes"
         />
       )}
+
+      {/* Guest Auth Gate Modal */}
+      <GuestAuthGateModal
+        isOpen={isGuestAuthModalOpen}
+        onClose={() => setIsGuestAuthModalOpen(false)}
+        author={{
+          username: reel.author.username,
+          displayName: reel.author.displayName,
+          avatar: reel.author.avatar,
+          emailVerified: reel.author.emailVerified,
+        }}
+      />
     </div>
   );
 }

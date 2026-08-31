@@ -17,6 +17,7 @@ import {
 import { ImageCarousel } from './ImageCarousel';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { LikesListModal } from './LikesListModal';
+import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { useAuth } from '@/context/AuthContext';
 import { IPostImage } from '@/models/Post';
 
@@ -99,12 +100,16 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
   const [editCaptionValue, setEditCaptionValue] = useState(post.caption);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
   const [isLikesModalOpen, setIsLikesModalOpen] = useState(false);
+  const [isGuestAuthModalOpen, setIsGuestAuthModalOpen] = useState(false);
 
   const isAuthor = currentUser && currentUser._id.toString() === post.author._id.toString();
 
   // Like Toggle
   const handleToggleLike = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setIsGuestAuthModalOpen(true);
+      return;
+    }
 
     const nextLiked = !isLiked;
     setIsLiked(nextLiked);
@@ -126,6 +131,10 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
 
   // Double tap to like
   const handleDoubleTap = () => {
+    if (!currentUser) {
+      setIsGuestAuthModalOpen(true);
+      return;
+    }
     if (!isLiked) {
       handleToggleLike();
     }
@@ -135,7 +144,10 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
 
   // Save / Bookmark Toggle
   const handleToggleSave = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setIsGuestAuthModalOpen(true);
+      return;
+    }
 
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
@@ -151,9 +163,9 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
     }
   };
 
-  // Copy Link
+  // Copy Link (Standard Instagram-style /p/[id] link)
   const handleCopyLink = () => {
-    const postUrl = `${window.location.origin}/u/${post.author.username}#${post._id}`;
+    const postUrl = `${window.location.origin}/p/${post._id}`;
     navigator.clipboard.writeText(postUrl);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
@@ -491,6 +503,18 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
           title="Liked by"
         />
       )}
+
+      {/* Guest Auth Gate Modal */}
+      <GuestAuthGateModal
+        isOpen={isGuestAuthModalOpen}
+        onClose={() => setIsGuestAuthModalOpen(false)}
+        author={{
+          username: post.author.username,
+          displayName: post.author.displayName,
+          avatar: post.author.avatar,
+          emailVerified: post.author.emailVerified,
+        }}
+      />
     </article>
   );
 }
