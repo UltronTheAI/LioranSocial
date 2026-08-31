@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Types } from 'mongoose';
 import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/db';
+import '@/models/User';
 import Reel from '@/models/Reel';
 import { SingleReelClient } from './SingleReelClient';
 import { ReelData } from '@/components/reel/ReelPlayer';
@@ -20,17 +21,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
 
-  const reel = await Reel.findById(id)
-    .populate('authorId', 'username displayName avatar emailVerified')
-    .lean();
+    const reel = await Reel.findById(id)
+      .populate('authorId', 'username displayName avatar emailVerified')
+      .lean();
 
-  if (!reel) {
-    return {
-      title: 'Reel Not Found | LioranSocial',
-    };
-  }
+    if (!reel) {
+      return {
+        title: 'Reel Not Found | LioranSocial',
+      };
+    }
 
   const author = reel.authorId as unknown as {
     username?: string;
@@ -95,7 +97,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
           ]
         : undefined,
     },
-  };
+    };
+  } catch (error) {
+    console.error('Error generating reel metadata:', error);
+    return {
+      title: 'Reel | LioranSocial',
+    };
+  }
 }
 
 export default async function SingleReelPage({ params }: Props) {
@@ -105,52 +113,63 @@ export default async function SingleReelPage({ params }: Props) {
     notFound();
   }
 
-  await connectToDatabase();
+  let initialReel: ReelData | null = null;
 
-  const reel = await Reel.findById(id)
-    .populate('authorId', 'username displayName avatar emailVerified')
-    .lean();
+  try {
+    await connectToDatabase();
 
-  if (!reel) {
+    const reel = await Reel.findById(id)
+      .populate('authorId', 'username displayName avatar emailVerified')
+      .lean();
+
+    if (!reel) {
+      notFound();
+    }
+
+    const authorDoc = reel.authorId as unknown as {
+      _id?: { toString: () => string };
+      username?: string;
+      displayName?: string;
+      avatar?: string;
+      emailVerified?: boolean;
+    } | null;
+
+    initialReel = {
+      _id: reel._id.toString(),
+      author: {
+        _id: authorDoc?._id ? authorDoc._id.toString() : '',
+        username: authorDoc?.username || 'user',
+        displayName: authorDoc?.displayName || 'Creator',
+        avatar: authorDoc?.avatar || '',
+        emailVerified: Boolean(authorDoc?.emailVerified),
+      },
+      video: {
+        publicId: reel.video?.publicId || '',
+        url: reel.video?.url || '',
+        secureUrl: reel.video?.secureUrl || reel.video?.url || '',
+        thumbnail: reel.video?.thumbnail || '',
+        duration: reel.video?.duration || 0,
+        width: reel.video?.width || 720,
+        height: reel.video?.height || 1280,
+      },
+      caption: reel.caption || '',
+      mentions: reel.mentions || [],
+      likesCount: reel.likesCount || 0,
+      commentsCount: reel.commentsCount || 0,
+      savesCount: reel.savesCount || 0,
+      viewsCount: reel.viewsCount || 0,
+      isLiked: false,
+      isSaved: false,
+      createdAt: reel.createdAt ? new Date(reel.createdAt).toISOString() : '',
+    };
+  } catch (error) {
+    console.error('Error loading single reel page:', error);
     notFound();
   }
 
-  const authorDoc = reel.authorId as unknown as {
-    _id?: { toString: () => string };
-    username?: string;
-    displayName?: string;
-    avatar?: string;
-    emailVerified?: boolean;
-  };
-
-  const initialReel: ReelData = {
-    _id: reel._id.toString(),
-    author: {
-      _id: authorDoc?._id ? authorDoc._id.toString() : '',
-      username: authorDoc?.username || 'user',
-      displayName: authorDoc?.displayName || 'Creator',
-      avatar: authorDoc?.avatar || '',
-      emailVerified: Boolean(authorDoc?.emailVerified),
-    },
-    video: {
-      publicId: reel.video?.publicId || '',
-      url: reel.video?.url || '',
-      secureUrl: reel.video?.secureUrl || reel.video?.url || '',
-      thumbnail: reel.video?.thumbnail || '',
-      duration: reel.video?.duration || 0,
-      width: reel.video?.width || 720,
-      height: reel.video?.height || 1280,
-    },
-    caption: reel.caption || '',
-    mentions: reel.mentions || [],
-    likesCount: reel.likesCount || 0,
-    commentsCount: reel.commentsCount || 0,
-    savesCount: reel.savesCount || 0,
-    viewsCount: reel.viewsCount || 0,
-    isLiked: false,
-    isSaved: false,
-    createdAt: reel.createdAt ? new Date(reel.createdAt).toISOString() : '',
-  };
+  if (!initialReel) {
+    notFound();
+  }
 
   return <SingleReelClient reelId={id} initialReel={JSON.parse(JSON.stringify(initialReel))} />;
 }

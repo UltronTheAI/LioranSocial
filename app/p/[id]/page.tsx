@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Types } from 'mongoose';
 import { notFound } from 'next/navigation';
 import { connectToDatabase } from '@/lib/db';
+import '@/models/User';
 import Post from '@/models/Post';
 import { SinglePostClient } from './SinglePostClient';
 import { PostCardData } from '@/components/post/PostCard';
@@ -20,17 +21,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
 
-  const post = await Post.findById(id)
-    .populate('authorId', 'username displayName avatar emailVerified')
-    .lean();
+    const post = await Post.findById(id)
+      .populate('authorId', 'username displayName avatar emailVerified')
+      .lean();
 
-  if (!post) {
-    return {
-      title: 'Post Not Found | LioranSocial',
-    };
-  }
+    if (!post) {
+      return {
+        title: 'Post Not Found | LioranSocial',
+      };
+    }
 
   const author = post.authorId as unknown as {
     username?: string;
@@ -76,6 +78,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: [coverImage],
     },
   };
+  } catch (error) {
+    console.error('Error generating post metadata:', error);
+    return {
+      title: 'Post | LioranSocial',
+    };
+  }
 }
 
 export default async function SinglePostPage({ params }: Props) {
@@ -85,49 +93,60 @@ export default async function SinglePostPage({ params }: Props) {
     notFound();
   }
 
-  await connectToDatabase();
+  let initialPost: PostCardData | null = null;
 
-  const post = await Post.findById(id)
-    .populate('authorId', 'username displayName avatar emailVerified')
-    .lean();
+  try {
+    await connectToDatabase();
 
-  if (!post) {
+    const post = await Post.findById(id)
+      .populate('authorId', 'username displayName avatar emailVerified')
+      .lean();
+
+    if (!post) {
+      notFound();
+    }
+
+    const authorDoc = post.authorId as unknown as {
+      _id?: { toString: () => string };
+      username?: string;
+      displayName?: string;
+      avatar?: string;
+      emailVerified?: boolean;
+    } | null;
+
+    initialPost = {
+      _id: post._id.toString(),
+      author: {
+        _id: authorDoc?._id ? authorDoc._id.toString() : '',
+        username: authorDoc?.username || 'user',
+        displayName: authorDoc?.displayName || 'Creator',
+        avatar: authorDoc?.avatar || '',
+        emailVerified: Boolean(authorDoc?.emailVerified),
+      },
+      images: (post.images || []).map((img) => ({
+        publicId: img.publicId || '',
+        url: img.url || '',
+        secureUrl: img.secureUrl || img.url || '',
+        width: img.width || 1080,
+        height: img.height || 1080,
+      })),
+      caption: post.caption || '',
+      mentions: post.mentions || [],
+      likesCount: post.likesCount || 0,
+      commentsCount: post.commentsCount || 0,
+      savesCount: post.savesCount || 0,
+      isLiked: false,
+      isSaved: false,
+      createdAt: post.createdAt ? new Date(post.createdAt).toISOString() : '',
+    };
+  } catch (error) {
+    console.error('Error loading single post page:', error);
     notFound();
   }
 
-  const authorDoc = post.authorId as unknown as {
-    _id?: { toString: () => string };
-    username?: string;
-    displayName?: string;
-    avatar?: string;
-    emailVerified?: boolean;
-  };
-
-  const initialPost: PostCardData = {
-    _id: post._id.toString(),
-    author: {
-      _id: authorDoc?._id ? authorDoc._id.toString() : '',
-      username: authorDoc?.username || 'user',
-      displayName: authorDoc?.displayName || 'Creator',
-      avatar: authorDoc?.avatar || '',
-      emailVerified: Boolean(authorDoc?.emailVerified),
-    },
-    images: (post.images || []).map((img) => ({
-      publicId: img.publicId || '',
-      url: img.url || '',
-      secureUrl: img.secureUrl || img.url || '',
-      width: img.width || 1080,
-      height: img.height || 1080,
-    })),
-    caption: post.caption || '',
-    mentions: post.mentions || [],
-    likesCount: post.likesCount || 0,
-    commentsCount: post.commentsCount || 0,
-    savesCount: post.savesCount || 0,
-    isLiked: false,
-    isSaved: false,
-    createdAt: post.createdAt ? new Date(post.createdAt).toISOString() : '',
-  };
+  if (!initialPost) {
+    notFound();
+  }
 
   return <SinglePostClient postId={id} initialPost={JSON.parse(JSON.stringify(initialPost))} />;
 }
