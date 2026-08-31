@@ -18,6 +18,7 @@ import { ImageCarousel } from './ImageCarousel';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { LikesListModal } from './LikesListModal';
 import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
+import { syncPostUpdate, syncPostDeleted } from '@/lib/storage-cache';
 import { useAuth } from '@/context/AuthContext';
 import { IPostImage } from '@/models/Post';
 
@@ -112,8 +113,10 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
     }
 
     const nextLiked = !isLiked;
+    const nextLikesCount = nextLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
     setIsLiked(nextLiked);
-    setLikesCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+    setLikesCount(nextLikesCount);
+    syncPostUpdate(post._id, { isLiked: nextLiked, likesCount: nextLikesCount });
 
     try {
       const res = await fetch(`/api/posts/${post._id}/like`, { method: 'POST' });
@@ -121,11 +124,13 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
       if (res.ok) {
         setIsLiked(data.isLiked);
         setLikesCount(data.likesCount);
+        syncPostUpdate(post._id, { isLiked: data.isLiked, likesCount: data.likesCount });
       }
     } catch {
       // Revert on failure
       setIsLiked(!nextLiked);
-      setLikesCount((prev) => (!nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+      setLikesCount(likesCount);
+      syncPostUpdate(post._id, { isLiked: !nextLiked, likesCount });
     }
   };
 
@@ -151,15 +156,18 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
 
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
+    syncPostUpdate(post._id, { isSaved: nextSaved });
 
     try {
       const res = await fetch(`/api/posts/${post._id}/save`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setIsSaved(data.isSaved);
+        syncPostUpdate(post._id, { isSaved: data.isSaved });
       }
     } catch {
       setIsSaved(!nextSaved);
+      syncPostUpdate(post._id, { isSaved: !nextSaved });
     }
   };
 
@@ -184,6 +192,7 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
       if (res.ok) {
         setCurrentCaption(editCaptionValue);
         setIsEditingCaption(false);
+        syncPostUpdate(post._id, { caption: editCaptionValue });
         if (onPostUpdated) {
           onPostUpdated({ ...post, caption: editCaptionValue });
         }
@@ -201,8 +210,11 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
     if (!confirm('Are you sure you want to delete this post?')) return;
     try {
       const res = await fetch(`/api/posts/${post._id}`, { method: 'DELETE' });
-      if (res.ok && onPostDeleted) {
-        onPostDeleted(post._id);
+      if (res.ok) {
+        syncPostDeleted(post._id);
+        if (onPostDeleted) {
+          onPostDeleted(post._id);
+        }
       }
     } catch (e) {
       console.error('Delete post failed:', e);
@@ -223,8 +235,10 @@ export function PostCard({ post, onOpenComments, onPostDeleted, onPostUpdated }:
       });
 
       if (res.ok) {
+        const nextCommentsCount = commentsCount + 1;
         setCommentText('');
-        setCommentsCount((prev) => prev + 1);
+        setCommentsCount(nextCommentsCount);
+        syncPostUpdate(post._id, { commentsCount: nextCommentsCount });
         if (onOpenComments) {
           onOpenComments(post._id);
         }

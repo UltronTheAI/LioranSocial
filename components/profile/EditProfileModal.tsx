@@ -8,6 +8,7 @@ import { Alert } from '@/components/ui/Alert';
 import { AvatarCropperModal } from './AvatarCropperModal';
 import { useAuth } from '@/context/AuthContext';
 import { SafeUser } from '@/types/user';
+import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
 
 export interface EditProfileModalProps {
   isOpen: boolean;
@@ -37,14 +38,19 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setIsSubmitting(true);
+    setError(null);
 
     try {
       const res = await fetch('/api/users/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          displayName: formData.displayName.trim(),
+          username: formData.username.trim(),
+          bio: formData.bio.trim(),
+          avatar: formData.avatar,
+        }),
       });
 
       const data = await res.json();
@@ -53,6 +59,12 @@ export function EditProfileModal({ isOpen, onClose, onProfileUpdated }: EditProf
         setError(data.error || 'Failed to update profile.');
         setIsSubmitting(false);
         return;
+      }
+
+      const cacheKey = `lioran_cached_profile_${data.user.username.toLowerCase()}`;
+      const existing = getStorageCache<{ user: SafeUser; isFollowing: boolean; isSelf: boolean }>(cacheKey);
+      if (existing) {
+        setStorageCache(cacheKey, { ...existing, user: data.user });
       }
 
       await refreshUser();

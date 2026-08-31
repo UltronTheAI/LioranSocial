@@ -27,7 +27,7 @@ import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import { FollowersListModal } from '@/components/profile/FollowersListModal';
 import { useAuth } from '@/context/AuthContext';
 import { SafeUser } from '@/types/user';
-import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
+import { getStorageCache, setStorageCache, syncUserFollow, syncPostDeleted } from '@/lib/storage-cache';
 
 interface ProfileData {
   user: SafeUser;
@@ -221,6 +221,7 @@ export default function UserProfilePage({
         followersCount: nextFollowersCount,
       },
     });
+    syncUserFollow(username, nextIsFollowing, nextIsFollowing ? 1 : -1);
 
     try {
       const res = await fetch(`/api/users/${encodeURIComponent(username)}/follow`, {
@@ -241,6 +242,7 @@ export default function UserProfilePage({
               }
             : null
         );
+        syncUserFollow(username, data.isFollowing, data.isFollowing ? 1 : -1);
       } else {
         refreshProfile();
       }
@@ -265,6 +267,7 @@ export default function UserProfilePage({
   };
 
   const handlePostDeleted = (postId: string) => {
+    syncPostDeleted(postId);
     setUserPosts((prev) => prev.filter((p) => p._id !== postId));
     setSavedPosts((prev) => prev.filter((p) => p._id !== postId));
     if (profile) {

@@ -18,6 +18,7 @@ import { Alert } from '@/components/ui/Alert';
 import { getCroppedImgBlob, Area } from '@/lib/crop-image';
 import { useAuth } from '@/context/AuthContext';
 import { PostCardData } from './PostCard';
+import { syncPostCreated } from '@/lib/storage-cache';
 
 export interface CreatePostModalProps {
   isOpen: boolean;
@@ -179,6 +180,8 @@ export function CreatePostModal({
       if (!postRes.ok) {
         throw new Error(postData.error || 'Failed to create post');
       }
+
+      syncPostCreated(postData.post);
 
       if (onPostCreated) {
         onPostCreated(postData.post);

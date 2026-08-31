@@ -19,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import { PostCardData } from './PostCard';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { LikesListModal } from './LikesListModal';
+import { syncPostUpdate, syncPostDeleted } from '@/lib/storage-cache';
 
 export interface CommentItem {
   _id: string;
@@ -188,12 +189,14 @@ export function PostDetailModal({
     const nextCount = nextLiked ? post.likesCount + 1 : Math.max(0, post.likesCount - 1);
 
     setPost({ ...post, isLiked: nextLiked, likesCount: nextCount });
+    syncPostUpdate(post._id, { isLiked: nextLiked, likesCount: nextCount });
 
     try {
       const res = await fetch(`/api/posts/${post._id}/like`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setPost((prev) => (prev ? { ...prev, isLiked: data.isLiked, likesCount: data.likesCount } : null));
+        syncPostUpdate(post._id, { isLiked: data.isLiked, likesCount: data.likesCount });
       }
     } catch {
       refreshPostDetails();
@@ -205,12 +208,14 @@ export function PostDetailModal({
     if (!currentUser || !post) return;
     const nextSaved = !post.isSaved;
     setPost({ ...post, isSaved: nextSaved });
+    syncPostUpdate(post._id, { isSaved: nextSaved });
 
     try {
       const res = await fetch(`/api/posts/${post._id}/save`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setPost((prev) => (prev ? { ...prev, isSaved: data.isSaved } : null));
+        syncPostUpdate(post._id, { isSaved: data.isSaved });
       }
     } catch {
       refreshPostDetails();
@@ -292,7 +297,12 @@ export function PostDetailModal({
       const data = await res.json();
       if (res.ok) {
         setComments((prev) => [...prev, data.comment]);
-        setPost((prev) => (prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : null));
+        setPost((prev) => {
+          if (!prev) return null;
+          const nextCount = prev.commentsCount + 1;
+          syncPostUpdate(prev._id, { commentsCount: nextCount });
+          return { ...prev, commentsCount: nextCount };
+        });
         if (replyingTo) {
           setExpandedThreads((prev) => ({ ...prev, [replyingTo.commentId]: true }));
         }
@@ -315,7 +325,12 @@ export function PostDetailModal({
       });
       if (res.ok) {
         setComments((prev) => prev.filter((c) => c._id !== commentId && c.parentId !== commentId));
-        setPost((prev) => (prev ? { ...prev, commentsCount: Math.max(0, prev.commentsCount - 1) } : null));
+        setPost((prev) => {
+          if (!prev) return null;
+          const nextCount = Math.max(0, prev.commentsCount - 1);
+          syncPostUpdate(prev._id, { commentsCount: nextCount });
+          return { ...prev, commentsCount: nextCount };
+        });
       }
     } catch (e) {
       console.error('Delete comment error:', e);
@@ -335,6 +350,7 @@ export function PostDetailModal({
       if (res.ok) {
         setPost((prev) => (prev ? { ...prev, caption: editCaptionValue } : null));
         setIsEditingCaption(false);
+        syncPostUpdate(post._id, { caption: editCaptionValue });
       }
     } catch (e) {
       console.error('Edit caption error:', e);
@@ -349,6 +365,7 @@ export function PostDetailModal({
     try {
       const res = await fetch(`/api/posts/${post._id}`, { method: 'DELETE' });
       if (res.ok) {
+        syncPostDeleted(post._id);
         if (onPostDeleted) onPostDeleted(post._id);
         onClose();
       }

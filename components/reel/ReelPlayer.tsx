@@ -21,6 +21,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ShareToChatModal } from '@/components/messages/ShareToChatModal';
 import { LikesListModal } from '@/components/post/LikesListModal';
 import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
+import { syncReelUpdate, syncReelDeleted } from '@/lib/storage-cache';
 import { IReelVideo } from '@/models/Reel';
 
 export interface ReelData {
@@ -111,12 +112,14 @@ export function ReelPlayer({
   const recordView = useCallback(async () => {
     if (viewCountedRef.current) return;
     viewCountedRef.current = true;
+    syncReelUpdate(reel._id, { viewsCount: (reel.viewsCount || 0) + 1 });
+
     try {
       await fetch(`/api/reels/${reel._id}/view`, { method: 'POST' });
     } catch (e) {
       console.error('Failed to record reel view:', e);
     }
-  }, [reel._id]);
+  }, [reel._id, reel.viewsCount]);
 
   // Video Autoplay / Pause management based on viewport activity
   useEffect(() => {
@@ -191,8 +194,10 @@ export function ReelPlayer({
       return;
     }
     const nextLiked = !isLiked;
+    const nextLikesCount = nextLiked ? likesCount + 1 : Math.max(0, likesCount - 1);
     setIsLiked(nextLiked);
-    setLikesCount((prev) => (nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+    setLikesCount(nextLikesCount);
+    syncReelUpdate(reel._id, { isLiked: nextLiked, likesCount: nextLikesCount });
 
     try {
       const res = await fetch(`/api/reels/${reel._id}/like`, { method: 'POST' });
@@ -200,10 +205,12 @@ export function ReelPlayer({
       if (res.ok) {
         setIsLiked(data.isLiked);
         setLikesCount(data.likesCount);
+        syncReelUpdate(reel._id, { isLiked: data.isLiked, likesCount: data.likesCount });
       }
     } catch {
       setIsLiked(!nextLiked);
-      setLikesCount((prev) => (!nextLiked ? prev + 1 : Math.max(0, prev - 1)));
+      setLikesCount(likesCount);
+      syncReelUpdate(reel._id, { isLiked: !nextLiked, likesCount });
     }
   };
 
@@ -228,15 +235,18 @@ export function ReelPlayer({
     }
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
+    syncReelUpdate(reel._id, { isSaved: nextSaved });
 
     try {
       const res = await fetch(`/api/reels/${reel._id}/save`, { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setIsSaved(data.isSaved);
+        syncReelUpdate(reel._id, { isSaved: data.isSaved });
       }
     } catch {
       setIsSaved(!nextSaved);
+      syncReelUpdate(reel._id, { isSaved: !nextSaved });
     }
   };
 
@@ -261,6 +271,7 @@ export function ReelPlayer({
       if (res.ok) {
         setCurrentCaption(editCaptionValue);
         setIsEditingCaption(false);
+        syncReelUpdate(reel._id, { caption: editCaptionValue });
       }
     } catch (e) {
       console.error('Update caption failed:', e);
@@ -275,8 +286,11 @@ export function ReelPlayer({
     if (!confirm('Are you sure you want to delete this reel?')) return;
     try {
       const res = await fetch(`/api/reels/${reel._id}`, { method: 'DELETE' });
-      if (res.ok && onReelDeleted) {
-        onReelDeleted(reel._id);
+      if (res.ok) {
+        syncReelDeleted(reel._id);
+        if (onReelDeleted) {
+          onReelDeleted(reel._id);
+        }
       }
     } catch (e) {
       console.error('Delete reel failed:', e);

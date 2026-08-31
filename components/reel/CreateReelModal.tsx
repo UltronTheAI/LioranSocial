@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { ReelData } from './ReelPlayer';
+import { syncReelCreated } from '@/lib/storage-cache';
 
 export interface CreateReelModalProps {
   isOpen: boolean;
@@ -167,6 +168,7 @@ export function CreateReelModal({
       }
 
       setUploadProgress(100);
+      syncReelCreated(reelData.reel);
 
       if (onReelCreated) {
         onReelCreated(reelData.reel);

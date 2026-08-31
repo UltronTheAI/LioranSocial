@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommentItem } from '@/components/post/PostDetailModal';
+import { syncReelUpdate } from '@/lib/storage-cache';
 
 export interface ReelCommentDrawerProps {
   reelId: string | null;
@@ -198,6 +199,7 @@ export function ReelCommentDrawer({
       if (res.ok) {
         const nextComments = [...comments, data.comment];
         setComments(nextComments);
+        syncReelUpdate(reelId, { commentsCount: nextComments.length });
         if (replyingTo) {
           setExpandedThreads((prev) => ({ ...prev, [replyingTo.commentId]: true }));
         }
@@ -224,6 +226,7 @@ export function ReelCommentDrawer({
       if (res.ok) {
         const nextComments = comments.filter((c) => c._id !== commentId && c.parentId !== commentId);
         setComments(nextComments);
+        syncReelUpdate(reelId, { commentsCount: nextComments.length });
         if (onCommentCountChange) {
           onCommentCountChange(nextComments.length);
         }

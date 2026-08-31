@@ -20,7 +20,7 @@ import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { PostCardData } from '@/components/post/PostCard';
 import { ReelData } from '@/components/reel/ReelPlayer';
 import { useAuth } from '@/context/AuthContext';
-import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
+import { getStorageCache, setStorageCache, syncUserFollow, SEARCH_CACHE_KEY } from '@/lib/storage-cache';
 
 interface SearchUser {
   _id: string;
@@ -30,8 +30,6 @@ interface SearchUser {
   bio?: string;
   isFollowing?: boolean;
 }
-
-const SEARCH_CACHE_KEY = 'lioran_cached_search_discovery';
 
 export default function SearchPage() {
   const { user: currentUser } = useAuth();
@@ -137,17 +135,21 @@ export default function SearchPage() {
     if (!currentUser) return;
     setTogglingUsernames((prev) => ({ ...prev, [targetUsername]: true }));
 
-    // Optimistic UI update
+    const targetUser = users.find((u) => u.username === targetUsername) || discoveryUsers.find((u) => u.username === targetUsername);
+    const nextIsFollowing = !targetUser?.isFollowing;
+
+    // Optimistic UI update & storage sync
     setUsers((prev) =>
       prev.map((u) =>
-        u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+        u.username === targetUsername ? { ...u, isFollowing: nextIsFollowing } : u
       )
     );
     setDiscoveryUsers((prev) =>
       prev.map((u) =>
-        u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+        u.username === targetUsername ? { ...u, isFollowing: nextIsFollowing } : u
       )
     );
+    syncUserFollow(targetUsername, nextIsFollowing, nextIsFollowing ? 1 : -1);
 
     try {
       const res = await fetch(`/api/users/${targetUsername}/follow`, {
@@ -166,19 +168,21 @@ export default function SearchPage() {
             u.username === targetUsername ? { ...u, isFollowing: data.isFollowing } : u
           )
         );
+        syncUserFollow(targetUsername, data.isFollowing, data.isFollowing ? 1 : -1);
       }
     } catch {
       // Revert on failure
       setUsers((prev) =>
         prev.map((u) =>
-          u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+          u.username === targetUsername ? { ...u, isFollowing: !nextIsFollowing } : u
         )
       );
       setDiscoveryUsers((prev) =>
         prev.map((u) =>
-          u.username === targetUsername ? { ...u, isFollowing: !u.isFollowing } : u
+          u.username === targetUsername ? { ...u, isFollowing: !nextIsFollowing } : u
         )
       );
+      syncUserFollow(targetUsername, !nextIsFollowing, !nextIsFollowing ? 1 : -1);
     } finally {
       setTogglingUsernames((prev) => ({ ...prev, [targetUsername]: false }));
     }

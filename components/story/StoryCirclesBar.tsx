@@ -6,9 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import { StoryViewerModal, StoryGroupData } from './StoryViewerModal';
 import { CreateStoryModal } from './CreateStoryModal';
-import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
-
-const STORIES_CACHE_KEY = 'lioran_cached_stories';
+import { getStorageCache, setStorageCache, syncStoryViewed, STORIES_CACHE_KEY } from '@/lib/storage-cache';
 
 export function StoryCirclesBar() {
   const { user: currentUser } = useAuth();
@@ -47,6 +45,8 @@ export function StoryCirclesBar() {
   }, [fetchStoriesData]);
 
   const handleStoryViewed = useCallback((storyId: string) => {
+    syncStoryViewed(storyId, currentUser?._id);
+
     setStoryGroups((prev) => {
       const updated = prev.map((g) => {
         const hasStory = g.stories.some((s) => s._id === storyId);
