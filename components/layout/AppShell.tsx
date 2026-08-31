@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
   Search,
@@ -14,6 +14,8 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { CreatePostModal } from '@/components/post/CreatePostModal';
+import { PostCardData } from '@/components/post/PostCard';
 import { cn } from '@/lib/utils';
 
 export interface AppShellProps {
@@ -23,8 +25,29 @@ export interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const { user, logout, loading } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const profileHref = user?.username ? `/u/${user.username}` : '/login';
+
+  const handleCreateClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setIsCreateModalOpen(true);
+  };
+
+  const handlePostCreated = (post: PostCardData) => {
+    // If on profile page or home page, can trigger soft refresh or route to profile
+    if (pathname === '/') {
+      window.location.reload();
+    } else {
+      router.push(`/u/${post.author.username}`);
+    }
+  };
 
   // Desktop Navigation Items
   const desktopNavItems = [
@@ -32,7 +55,7 @@ export function AppShell({ children }: AppShellProps) {
     { label: 'Search', href: '/search', icon: Search },
     { label: 'Reels', href: '/reels', icon: Clapperboard },
     { label: 'Messages', href: '/messages', icon: MessageCircle },
-    { label: 'Create', href: '#create', icon: PlusSquare },
+    { label: 'Create', href: '#create', icon: PlusSquare, onClick: handleCreateClick },
     { label: 'Notifications', href: '/notifications', icon: Heart },
     { label: 'Profile', href: profileHref, icon: UserIcon },
   ];
@@ -41,7 +64,7 @@ export function AppShell({ children }: AppShellProps) {
   const mobileNavItems = [
     { label: 'Home', href: '/', icon: Home },
     { label: 'Search', href: '/search', icon: Search },
-    { label: 'Create', href: '#create', icon: PlusSquare },
+    { label: 'Create', href: '#create', icon: PlusSquare, onClick: handleCreateClick },
     { label: 'Reels', href: '/reels', icon: Clapperboard },
     { label: 'Profile', href: profileHref, icon: UserIcon },
   ];
@@ -71,6 +94,19 @@ export function AppShell({ children }: AppShellProps) {
                 item.href === '/'
                   ? pathname === '/'
                   : item.href !== '#create' && pathname.startsWith(item.href);
+
+              if (item.onClick) {
+                return (
+                  <button
+                    key={item.label}
+                    onClick={item.onClick}
+                    className="w-full flex items-center gap-4 px-3.5 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-[#121215] transition-all duration-150 text-left cursor-pointer"
+                  >
+                    <Icon className="w-5 h-5 text-zinc-400" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              }
 
               return (
                 <Link
@@ -183,6 +219,19 @@ export function AppShell({ children }: AppShellProps) {
               ? pathname === '/'
               : item.href !== '#create' && pathname.startsWith(item.href);
 
+          if (item.onClick) {
+            return (
+              <button
+                key={item.label}
+                onClick={item.onClick}
+                className="p-2.5 rounded-xl text-zinc-400 hover:text-white transition-colors"
+                aria-label={item.label}
+              >
+                <Icon className="w-5 h-5" />
+              </button>
+            );
+          }
+
           return (
             <Link
               key={item.label}
@@ -198,6 +247,13 @@ export function AppShell({ children }: AppShellProps) {
           );
         })}
       </nav>
+
+      {/* Global Create Post Modal */}
+      <CreatePostModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onPostCreated={handlePostCreated}
+      />
     </div>
   );
 }

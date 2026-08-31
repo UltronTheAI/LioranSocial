@@ -11,11 +11,14 @@ import {
   UserPlus,
   UserCheck,
   Settings,
-  Image as ImageIcon,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
+import { PostGrid } from '@/components/post/PostGrid';
+import { PostCardData } from '@/components/post/PostCard';
+import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import { FollowersListModal } from '@/components/profile/FollowersListModal';
 import { useAuth } from '@/context/AuthContext';
@@ -43,7 +46,14 @@ export default function UserProfilePage({
   const [notFound, setNotFound] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
 
+  // Tabs & Posts State
+  const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
+  const [userPosts, setUserPosts] = useState<PostCardData[]>([]);
+  const [savedPosts, setSavedPosts] = useState<PostCardData[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+
   // Modals state
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [followModalMode, setFollowModalMode] = useState<'followers' | 'following' | null>(null);
 
@@ -64,6 +74,35 @@ export default function UserProfilePage({
     }
   }, [username]);
 
+  const fetchUserPostsData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/users/${username}/posts?limit=30`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) {
+        return data.posts || [];
+      }
+      return [];
+    } catch (e) {
+      console.error('Fetch user posts error:', e);
+      return [];
+    }
+  }, [username]);
+
+  const fetchSavedPostsData = useCallback(async () => {
+    if (!profile?.isSelf) return [];
+    try {
+      const res = await fetch(`/api/users/${username}/saved?limit=30`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) {
+        return data.posts || [];
+      }
+      return [];
+    } catch (e) {
+      console.error('Fetch saved posts error:', e);
+      return [];
+    }
+  }, [username, profile?.isSelf]);
+
   useEffect(() => {
     let isMounted = true;
     fetchProfileData().then((result) => {
@@ -78,6 +117,30 @@ export default function UserProfilePage({
       isMounted = false;
     };
   }, [fetchProfileData]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (activeTab === 'posts') {
+      fetchUserPostsData().then((posts) => {
+        if (isMounted) {
+          setUserPosts(posts);
+          setPostsLoading(false);
+        }
+      });
+    } else if (activeTab === 'saved') {
+      fetchSavedPostsData().then((posts) => {
+        if (isMounted) {
+          setSavedPosts(posts);
+          setPostsLoading(false);
+        }
+      });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, fetchUserPostsData, fetchSavedPostsData]);
 
   const refreshProfile = useCallback(async () => {
     const result = await fetchProfileData();
@@ -130,11 +193,9 @@ export default function UserProfilePage({
             : null
         );
       } else {
-        // Rollback
         refreshProfile();
       }
     } catch {
-      // Rollback
       refreshProfile();
     } finally {
       setIsFollowLoading(false);
@@ -150,6 +211,20 @@ export default function UserProfilePage({
       if (updatedUser.username !== username) {
         router.replace(`/u/${updatedUser.username}`);
       }
+    }
+  };
+
+  const handlePostDeleted = (deletedPostId: string) => {
+    setUserPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
+    setSavedPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
+    if (profile) {
+      setProfile({
+        ...profile,
+        user: {
+          ...profile.user,
+          postsCount: Math.max(0, profile.user.postsCount - 1),
+        },
+      });
     }
   };
 
@@ -201,7 +276,7 @@ export default function UserProfilePage({
 
   return (
     <AppShell>
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-8">
         {/* ================================================================= */}
         {/* Profile Header */}
         {/* ================================================================= */}
@@ -317,34 +392,55 @@ export default function UserProfilePage({
         </div>
 
         {/* ================================================================= */}
-        {/* Post Grid Tab / Placeholder */}
+        {/* Posts and Saved Tabs Navigation */}
         {/* ================================================================= */}
         <div className="border-t border-[#27272a] pt-4 space-y-6">
           <div className="flex justify-center gap-8 text-xs font-semibold uppercase tracking-wider">
-            <button className="flex items-center gap-2 pb-2 border-b-2 border-white text-white">
+            <button
+              type="button"
+              onClick={() => setActiveTab('posts')}
+              className={`flex items-center gap-2 pb-2 transition-colors cursor-pointer ${
+                activeTab === 'posts'
+                  ? 'border-b-2 border-white text-white'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
               <Grid className="w-4 h-4" /> Posts
             </button>
             {isSelf && (
-              <button className="flex items-center gap-2 pb-2 text-zinc-500 hover:text-zinc-300 transition-colors">
+              <button
+                type="button"
+                onClick={() => setActiveTab('saved')}
+                className={`flex items-center gap-2 pb-2 transition-colors cursor-pointer ${
+                  activeTab === 'saved'
+                    ? 'border-b-2 border-white text-white'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
                 <Bookmark className="w-4 h-4" /> Saved
               </button>
             )}
           </div>
 
-          {/* Empty Grid Placeholder */}
-          <div className="bg-[#121215]/50 border border-dashed border-[#27272a] rounded-2xl py-16 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#18181b] border border-[#27272a] flex items-center justify-center mx-auto text-zinc-500">
-              <ImageIcon className="w-6 h-6" />
+          {/* Posts Grid Container */}
+          {postsLoading ? (
+            <div className="py-16 text-center text-zinc-500">
+              <Loader2 className="w-6 h-6 animate-spin mx-auto" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-white">No Posts Yet</h3>
-              <p className="text-xs text-zinc-400 max-w-sm mx-auto">
-                {isSelf
-                  ? 'Share your first photo or video with the world.'
-                  : `@${user.username} hasn't published any posts yet.`}
-              </p>
-            </div>
-          </div>
+          ) : (
+            <PostGrid
+              posts={activeTab === 'posts' ? userPosts : savedPosts}
+              onPostClick={(post) => setSelectedPostId(post._id)}
+              emptyTitle={activeTab === 'posts' ? 'No Posts Yet' : 'No Saved Posts'}
+              emptySubtitle={
+                activeTab === 'posts'
+                  ? isSelf
+                    ? 'Share your first photo with the world.'
+                    : `@${user.username} hasn't published any posts yet.`
+                  : 'Save photos and videos that you want to see again.'
+              }
+            />
+          )}
         </div>
       </div>
 
@@ -367,6 +463,14 @@ export default function UserProfilePage({
           onRelationshipChanged={refreshProfile}
         />
       )}
+
+      {/* Post Detail Modal */}
+      <PostDetailModal
+        postId={selectedPostId}
+        isOpen={Boolean(selectedPostId)}
+        onClose={() => setSelectedPostId(null)}
+        onPostDeleted={handlePostDeleted}
+      />
     </AppShell>
   );
 }
