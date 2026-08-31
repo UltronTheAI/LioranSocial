@@ -7,8 +7,8 @@ const PUBLIC_PREFIXES = ['/api', '/_next', '/favicon.ico', '/public'];
 
 // Publicly accessible pages without requiring login
 const PUBLIC_PAGE_PREFIXES = [
-  '/p/',
-  '/posts/',
+  '/p',
+  '/posts',
   '/reels',
   '/r/',
   '/u/',
