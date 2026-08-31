@@ -118,9 +118,59 @@ export function StoryViewerModal({
   const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const viewRecordedRef = useRef<Record<string, boolean>>({});
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const isPushedRef = useRef(false);
+
+  // Lock body scrolling while Story is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  // Android & Browser Hardware Back button support (Closes Story instantly on Back)
+  useEffect(() => {
+    if (!isOpen) {
+      isPushedRef.current = false;
+      return;
+    }
+
+    if (!isPushedRef.current && typeof window !== 'undefined') {
+      window.history.pushState({ modal: 'story-viewer' }, '');
+      isPushedRef.current = true;
+    }
+
+    const handlePopState = () => {
+      isPushedRef.current = false;
+      onCloseRef.current();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen]);
+
+  const handleSafeClose = useCallback(() => {
+    if (isPushedRef.current && typeof window !== 'undefined') {
+      isPushedRef.current = false;
+      window.history.back();
+    } else {
+      onClose();
+    }
+  }, [onClose]);
+
   const currentGroup = storyGroups[authorIndex];
   const currentStory = currentGroup?.stories[storyIndex];
-  const isOwner = currentUser && currentGroup?.author._id === currentUser._id;
+  const isOwner = Boolean(currentUser && currentGroup?.author._id === currentUser._id);
 
   // Record view after short duration
   const recordStoryView = useCallback(
@@ -387,20 +437,31 @@ export function StoryViewerModal({
   if (!isOpen || !currentGroup || !currentStory) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200 select-none">
+    <div
+      onClick={handleSafeClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 select-none overflow-hidden"
+    >
       {/* Top Close Button (Desktop) */}
       <button
-        onClick={onClose}
-        className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black transition-colors cursor-pointer"
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleSafeClose();
+        }}
+        className="hidden sm:flex absolute top-4 right-4 z-50 p-2.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white/90 hover:text-white transition-colors cursor-pointer shadow-xl border border-zinc-700"
       >
-        <X className="w-6 h-6" />
+        <X className="w-5 h-5" />
       </button>
 
       {/* Nav arrow Left (Desktop) */}
       {!(authorIndex === 0 && storyIndex === 0) && (
         <button
-          onClick={handlePrev}
-          className="hidden md:flex absolute left-8 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/60 text-white items-center justify-center hover:bg-black transition-colors cursor-pointer"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePrev();
+          }}
+          className="hidden md:flex absolute left-8 top-1/2 -translate-y-1/2 z-40 w-11 h-11 rounded-full bg-zinc-900/80 border border-zinc-700 text-white items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer shadow-xl hover:scale-105"
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
@@ -409,16 +470,21 @@ export function StoryViewerModal({
       {/* Nav arrow Right (Desktop) */}
       {!(authorIndex === storyGroups.length - 1 && storyIndex === currentGroup.stories.length - 1) && (
         <button
-          onClick={handleNext}
-          className="hidden md:flex absolute right-8 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/60 text-white items-center justify-center hover:bg-black transition-colors cursor-pointer"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleNext();
+          }}
+          className="hidden md:flex absolute right-8 top-1/2 -translate-y-1/2 z-40 w-11 h-11 rounded-full bg-zinc-900/80 border border-zinc-700 text-white items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer shadow-xl hover:scale-105"
         >
           <ChevronRight className="w-6 h-6" />
         </button>
       )}
 
-      {/* Story Player Container */}
+      {/* Story Player Container - Full screen on phone & full height 9:16 viewport on PC */}
       <div
-        className="relative w-full sm:max-w-md h-full sm:h-[88vh] bg-black rounded-none sm:rounded-2xl overflow-hidden shadow-2xl border-0 sm:border sm:border-[#27272a]/60 flex flex-col justify-between"
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full h-[100dvh] md:h-screen md:w-[calc(100vh*9/16)] md:max-w-[480px] bg-black rounded-none md:rounded-2xl overflow-hidden shadow-2xl border-0 md:border md:border-[#27272a]/60 flex flex-col justify-between"
         onPointerDown={() => setIsHolding(true)}
         onPointerUp={() => setIsHolding(false)}
         onPointerCancel={() => setIsHolding(false)}
@@ -499,7 +565,8 @@ export function StoryViewerModal({
                 </button>
               )}
               <button
-                onClick={onClose}
+                type="button"
+                onClick={handleSafeClose}
                 className="p-1.5 text-white/80 hover:text-white sm:hidden cursor-pointer"
               >
                 <X className="w-5 h-5" />
