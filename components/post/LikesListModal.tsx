@@ -61,11 +61,67 @@ export function LikesListModal({
     };
   }, [isOpen, targetId, type]);
 
+  // Lock body scroll while likes modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  const onCloseRef = React.useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const isPushedRef = React.useRef(false);
+
+  // Android & Browser Hardware Back button support
+  useEffect(() => {
+    if (!isOpen) {
+      isPushedRef.current = false;
+      return;
+    }
+
+    if (!isPushedRef.current && typeof window !== 'undefined') {
+      window.history.pushState({ modal: 'likes-list' }, '');
+      isPushedRef.current = true;
+    }
+
+    const handlePopState = () => {
+      isPushedRef.current = false;
+      onCloseRef.current();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen]);
+
+  const handleSafeClose = React.useCallback(() => {
+    if (isPushedRef.current && typeof window !== 'undefined') {
+      isPushedRef.current = false;
+      window.history.back();
+    } else {
+      onClose();
+    }
+  }, [onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 select-none">
-      <div className="bg-[#121215] border border-[#27272a] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[75vh]">
+    <div
+      onClick={handleSafeClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 select-none"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#121215] border border-[#27272a] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[75vh]"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#27272a]">
           <div className="flex items-center gap-2">
@@ -74,7 +130,7 @@ export function LikesListModal({
             <span className="text-xs text-zinc-500 font-semibold">({likes.length})</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleSafeClose}
             className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { PostCard, PostCardData } from '@/components/post/PostCard';
@@ -17,6 +18,7 @@ export function SinglePostClient({
   postId: string;
   initialPost?: PostCardData | null;
 }) {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
   const [post, setPost] = useState<PostCardData | null>(initialPost || null);
@@ -121,13 +123,20 @@ export function SinglePostClient({
       <div className="max-w-xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-6 pb-24 md:pb-8">
         {/* Top Header Bar */}
         <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push('/posts');
+              }
+            }}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to feed</span>
-          </Link>
+            <span>Back</span>
+          </button>
 
           {!user && (
             <div className="flex items-center gap-2">

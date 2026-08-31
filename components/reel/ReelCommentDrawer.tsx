@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   X,
@@ -113,24 +113,40 @@ export function ReelCommentDrawer({
     }
   }, [isOpen]);
 
-  // Android & Browser Hardware Back button support (Closes drawer instead of navigating page back)
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
-    if (!isOpen) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
-    window.history.pushState({ modal: 'reel-comments' }, '');
+  const isPushedRef = useRef(false);
+
+  // Android & Browser Hardware Back button support (Closes drawer instantly on Back)
+  useEffect(() => {
+    if (!isOpen) {
+      isPushedRef.current = false;
+      return;
+    }
+
+    // Push history state exactly ONCE when opened
+    if (!isPushedRef.current && typeof window !== 'undefined') {
+      window.history.pushState({ modal: 'reel-comments' }, '');
+      isPushedRef.current = true;
+    }
 
     const handlePopState = () => {
-      onClose();
+      isPushedRef.current = false;
+      onCloseRef.current();
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const handleSafeClose = useCallback(() => {
-    if (typeof window !== 'undefined' && window.history.state?.modal === 'reel-comments') {
+    if (isPushedRef.current && typeof window !== 'undefined') {
+      isPushedRef.current = false;
       window.history.back();
     } else {
       onClose();
