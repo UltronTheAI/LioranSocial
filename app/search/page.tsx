@@ -20,7 +20,7 @@ import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { PostCardData } from '@/components/post/PostCard';
 import { ReelData } from '@/components/reel/ReelPlayer';
 import { useAuth } from '@/context/AuthContext';
-import { getStorageCache, setStorageCache, syncUserFollow, SEARCH_CACHE_KEY } from '@/lib/storage-cache';
+import { getOfflineCache, getStorageCache, setStorageCache, syncUserFollow, SEARCH_CACHE_KEY } from '@/lib/storage-cache';
 
 interface SearchUser {
   _id: string;
@@ -41,32 +41,32 @@ export default function SearchPage() {
   const [reels, setReels] = useState<ReelData[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Discovery / Default fallback data (cached with lazy initializer)
+  // Discovery data (only loaded from cache if offline)
   const [discoveryUsers, setDiscoveryUsers] = useState<SearchUser[]>(() => {
-    const cached = getStorageCache<{ users: SearchUser[] }>(SEARCH_CACHE_KEY);
-    return cached?.users || [];
+    const offlineCache = getOfflineCache<{ users: SearchUser[] }>(SEARCH_CACHE_KEY);
+    return offlineCache?.users || [];
   });
   const [discoveryPosts, setDiscoveryPosts] = useState<PostCardData[]>(() => {
-    const cached = getStorageCache<{ posts: PostCardData[] }>(SEARCH_CACHE_KEY);
-    return cached?.posts || [];
+    const offlineCache = getOfflineCache<{ posts: PostCardData[] }>(SEARCH_CACHE_KEY);
+    return offlineCache?.posts || [];
   });
   const [discoveryReels, setDiscoveryReels] = useState<ReelData[]>(() => {
-    const cached = getStorageCache<{ reels: ReelData[] }>(SEARCH_CACHE_KEY);
-    return cached?.reels || [];
+    const offlineCache = getOfflineCache<{ reels: ReelData[] }>(SEARCH_CACHE_KEY);
+    return offlineCache?.reels || [];
   });
   const [loadingDiscovery, setLoadingDiscovery] = useState(() => {
-    const cached = getStorageCache<{ users: SearchUser[] }>(SEARCH_CACHE_KEY);
-    return !(cached && cached.users && cached.users.length > 0);
+    const offlineCache = getOfflineCache<{ users: SearchUser[] }>(SEARCH_CACHE_KEY);
+    return !(offlineCache && offlineCache.users && offlineCache.users.length > 0);
   });
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [togglingUsernames, setTogglingUsernames] = useState<Record<string, boolean>>({});
 
-  // 1. Fetch Discovery Suggestions on Mount (Stale-while-revalidate in background)
+  // Always fetch fresh discovery suggestions from internet when online
   useEffect(() => {
     let isMounted = true;
 
-    fetch('/api/search?q=&type=top')
+    fetch('/api/search?q=&type=top', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
@@ -87,7 +87,15 @@ export default function SearchPage() {
       })
       .catch((e) => {
         console.error('Fetch discovery error:', e);
-        if (isMounted) setLoadingDiscovery(false);
+        if (isMounted) {
+          const fallbackCache = getStorageCache<{ users: SearchUser[]; posts: PostCardData[]; reels: ReelData[] }>(SEARCH_CACHE_KEY);
+          if (fallbackCache) {
+            if (fallbackCache.users) setDiscoveryUsers(fallbackCache.users);
+            if (fallbackCache.posts) setDiscoveryPosts(fallbackCache.posts);
+            if (fallbackCache.reels) setDiscoveryReels(fallbackCache.reels);
+          }
+          setLoadingDiscovery(false);
+        }
       });
 
     return () => {

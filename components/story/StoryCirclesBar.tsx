@@ -6,18 +6,18 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import { StoryViewerModal, StoryGroupData } from './StoryViewerModal';
 import { CreateStoryModal } from './CreateStoryModal';
-import { getStorageCache, setStorageCache, syncStoryViewed, STORIES_CACHE_KEY } from '@/lib/storage-cache';
+import { getOfflineCache, getStorageCache, setStorageCache, syncStoryViewed, STORIES_CACHE_KEY } from '@/lib/storage-cache';
 
 export function StoryCirclesBar() {
   const { user: currentUser } = useAuth();
   const { socket } = useSocket();
 
   const [storyGroups, setStoryGroups] = useState<StoryGroupData[]>(() => {
-    return getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY) || [];
+    return getOfflineCache<StoryGroupData[]>(STORIES_CACHE_KEY) || [];
   });
   const [loading, setLoading] = useState(() => {
-    const cached = getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY);
-    return !(cached && cached.length > 0);
+    const offlineCache = getOfflineCache<StoryGroupData[]>(STORIES_CACHE_KEY);
+    return !(offlineCache && offlineCache.length > 0);
   });
   const [activeAuthorIndex, setActiveAuthorIndex] = useState<number | null>(null);
   const [isCreateStoryOpen, setIsCreateStoryOpen] = useState(false);
@@ -30,10 +30,11 @@ export function StoryCirclesBar() {
         setStorageCache(STORIES_CACHE_KEY, data.storyGroups);
         return data.storyGroups || [];
       }
-      return [];
+      // Fallback to cache on error
+      return getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY) || [];
     } catch (e) {
       console.error('Fetch stories error:', e);
-      return [];
+      return getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY) || [];
     }
   }, []);
 
@@ -222,6 +223,18 @@ export function StoryCirclesBar() {
             </div>
           );
         })}
+
+        {/* Loading Story Skeletons */}
+        {loading && storyGroups.length === 0 && (
+          <div className="flex items-center gap-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 animate-pulse">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-zinc-800 border-2 border-zinc-700/60" />
+                <div className="w-12 h-2.5 bg-zinc-800 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {!loading && storyGroups.length === 0 && !currentUser && (
           <p className="text-xs text-zinc-500 py-3 px-2">No active stories available right now.</p>

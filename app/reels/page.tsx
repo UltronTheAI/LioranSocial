@@ -11,7 +11,7 @@ import { CreateReelModal } from '@/components/reel/CreateReelModal';
 import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
-import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
+import { getOfflineCache, getStorageCache, setStorageCache } from '@/lib/storage-cache';
 
 const REELS_CACHE_KEY = 'lioran_cached_reels_top';
 
@@ -20,17 +20,17 @@ function ReelsContent() {
   const searchParams = useSearchParams();
 
   const [reels, setReels] = useState<ReelData[]>(() => {
-    const cached = getStorageCache<{ reels: ReelData[] }>(REELS_CACHE_KEY);
-    return cached?.reels || [];
+    const offlineCache = getOfflineCache<{ reels: ReelData[] }>(REELS_CACHE_KEY);
+    return offlineCache?.reels || [];
   });
   const [loading, setLoading] = useState(() => {
-    const cached = getStorageCache<{ reels: ReelData[] }>(REELS_CACHE_KEY);
-    return !(cached?.reels && cached.reels.length > 0);
+    const offlineCache = getOfflineCache<{ reels: ReelData[] }>(REELS_CACHE_KEY);
+    return !(offlineCache?.reels && offlineCache.reels.length > 0);
   });
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(() => {
-    const cached = getStorageCache<{ nextCursor: string | null }>(REELS_CACHE_KEY);
-    return cached?.nextCursor || null;
+    const offlineCache = getOfflineCache<{ nextCursor: string | null }>(REELS_CACHE_KEY);
+    return offlineCache?.nextCursor || null;
   });
   const [hasMore, setHasMore] = useState(true);
 
@@ -60,7 +60,7 @@ function ReelsContent() {
     return null;
   }, [searchParams]);
 
-  // Initial Fetch with LocalStorage Cache in background
+  // Always fetch fresh reels from internet when online
   useEffect(() => {
     let isMounted = true;
 
@@ -83,7 +83,15 @@ function ReelsContent() {
       })
       .catch((e) => {
         console.error('Fetch reels error:', e);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          const fallbackCache = getStorageCache<{ reels: ReelData[]; nextCursor: string | null; hasMore: boolean }>(REELS_CACHE_KEY);
+          if (fallbackCache?.reels && fallbackCache.reels.length > 0) {
+            setReels(fallbackCache.reels);
+            setNextCursor(fallbackCache.nextCursor || null);
+            setHasMore(Boolean(fallbackCache.hasMore));
+          }
+          setLoading(false);
+        }
       });
 
     return () => {

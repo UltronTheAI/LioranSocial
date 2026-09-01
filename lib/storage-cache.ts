@@ -12,6 +12,19 @@ export const REELS_CACHE_KEY = 'lioran_cached_reels_top';
 export const STORIES_CACHE_KEY = 'lioran_cached_stories';
 export const SEARCH_CACHE_KEY = 'lioran_cached_search_discovery';
 
+export function isOffline(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return navigator.onLine === false;
+}
+
+/**
+ * Retrieve cached data only when offline (offline-first fallback)
+ */
+export function getOfflineCache<T>(key: string): T | null {
+  if (!isOffline()) return null;
+  return getStorageCache<T>(key);
+}
+
 export function getStorageCache<T>(key: string): T | null {
   if (typeof window === 'undefined') return null;
   try {

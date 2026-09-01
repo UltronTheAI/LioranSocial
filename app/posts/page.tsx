@@ -19,6 +19,7 @@ import { GuestAuthGateModal } from '@/components/auth/GuestAuthGateModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import {
+  getOfflineCache,
   getStorageCache,
   setStorageCache,
   syncPostCreated,
@@ -30,17 +31,17 @@ export default function PostsPage() {
   const { user: currentUser } = useAuth();
 
   const [posts, setPosts] = useState<PostCardData[]>(() => {
-    const cached = getStorageCache<{ posts: PostCardData[] }>(EXPLORE_POSTS_CACHE_KEY);
-    return cached?.posts || [];
+    const offlineCache = getOfflineCache<{ posts: PostCardData[] }>(EXPLORE_POSTS_CACHE_KEY);
+    return offlineCache?.posts || [];
   });
   const [loading, setLoading] = useState(() => {
-    const cached = getStorageCache<{ posts: PostCardData[] }>(EXPLORE_POSTS_CACHE_KEY);
-    return !(cached?.posts && cached.posts.length > 0);
+    const offlineCache = getOfflineCache<{ posts: PostCardData[] }>(EXPLORE_POSTS_CACHE_KEY);
+    return !(offlineCache?.posts && offlineCache.posts.length > 0);
   });
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(() => {
-    const cached = getStorageCache<{ nextCursor: string | null }>(EXPLORE_POSTS_CACHE_KEY);
-    return cached?.nextCursor || null;
+    const offlineCache = getOfflineCache<{ nextCursor: string | null }>(EXPLORE_POSTS_CACHE_KEY);
+    return offlineCache?.nextCursor || null;
   });
   const [hasMore, setHasMore] = useState(true);
 
@@ -54,7 +55,7 @@ export default function PostsPage() {
 
   const guestTimerTriggeredRef = useRef(false);
 
-  // Initial Fetch with LocalStorage caching
+  // Always fetch fresh posts from internet when online
   useEffect(() => {
     let isMounted = true;
 
@@ -76,7 +77,15 @@ export default function PostsPage() {
       })
       .catch((e) => {
         console.error('Fetch posts error:', e);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          const fallbackCache = getStorageCache<{ posts: PostCardData[]; nextCursor: string | null; hasMore: boolean }>(EXPLORE_POSTS_CACHE_KEY);
+          if (fallbackCache?.posts && fallbackCache.posts.length > 0) {
+            setPosts(fallbackCache.posts);
+            setNextCursor(fallbackCache.nextCursor || null);
+            setHasMore(Boolean(fallbackCache.hasMore));
+          }
+          setLoading(false);
+        }
       });
 
     return () => {

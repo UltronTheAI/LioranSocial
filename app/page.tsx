@@ -10,25 +10,28 @@ import { PostDetailModal } from '@/components/post/PostDetailModal';
 import { CreatePostModal } from '@/components/post/CreatePostModal';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
-import { getStorageCache, setStorageCache } from '@/lib/storage-cache';
-
-const FEED_POSTS_CACHE_KEY = 'lioran_cached_feed_posts';
+import {
+  getOfflineCache,
+  getStorageCache,
+  setStorageCache,
+  FEED_POSTS_CACHE_KEY,
+} from '@/lib/storage-cache';
 
 export default function HomePage() {
   const { user } = useAuth();
 
   const [posts, setPosts] = useState<PostCardData[]>(() => {
-    const cached = getStorageCache<{ posts: PostCardData[] }>(FEED_POSTS_CACHE_KEY);
-    return cached?.posts || [];
+    const offlineCache = getOfflineCache<{ posts: PostCardData[] }>(FEED_POSTS_CACHE_KEY);
+    return offlineCache?.posts || [];
   });
   const [loading, setLoading] = useState(() => {
-    const cached = getStorageCache<{ posts: PostCardData[] }>(FEED_POSTS_CACHE_KEY);
-    return !(cached?.posts && cached.posts.length > 0);
+    const offlineCache = getOfflineCache<{ posts: PostCardData[] }>(FEED_POSTS_CACHE_KEY);
+    return !(offlineCache?.posts && offlineCache.posts.length > 0);
   });
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(() => {
-    const cached = getStorageCache<{ nextCursor: string | null }>(FEED_POSTS_CACHE_KEY);
-    return cached?.nextCursor || null;
+    const offlineCache = getOfflineCache<{ nextCursor: string | null }>(FEED_POSTS_CACHE_KEY);
+    return offlineCache?.nextCursor || null;
   });
   const [hasMore, setHasMore] = useState(true);
 
@@ -39,7 +42,7 @@ export default function HomePage() {
   // Sentinel ref for IntersectionObserver
   const observerTarget = useRef<HTMLDivElement | null>(null);
 
-  // Fetch fresh feed in background
+  // Always fetch fresh feed from internet when online
   useEffect(() => {
     let isMounted = true;
 
@@ -53,6 +56,7 @@ export default function HomePage() {
           setNextCursor(data.nextCursor || null);
           setHasMore(Boolean(data.hasMore));
 
+          // Keep cache up to date for offline fallback
           setStorageCache(FEED_POSTS_CACHE_KEY, {
             posts: fetchedPosts.slice(0, 20),
             nextCursor: data.nextCursor || null,
@@ -63,7 +67,16 @@ export default function HomePage() {
       })
       .catch((e) => {
         console.error('Fetch feed error:', e);
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          // If offline / network error, fall back to storage cache
+          const fallbackCache = getStorageCache<{ posts: PostCardData[]; nextCursor: string | null; hasMore: boolean }>(FEED_POSTS_CACHE_KEY);
+          if (fallbackCache?.posts && fallbackCache.posts.length > 0) {
+            setPosts(fallbackCache.posts);
+            setNextCursor(fallbackCache.nextCursor || null);
+            setHasMore(Boolean(fallbackCache.hasMore));
+          }
+          setLoading(false);
+        }
       });
 
     return () => {

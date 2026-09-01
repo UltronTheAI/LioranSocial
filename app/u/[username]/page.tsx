@@ -26,7 +26,7 @@ import { EditProfileModal } from '@/components/profile/EditProfileModal';
 import { FollowersListModal } from '@/components/profile/FollowersListModal';
 import { useAuth } from '@/context/AuthContext';
 import { SafeUser } from '@/types/user';
-import { getStorageCache, setStorageCache, syncUserFollow, syncPostDeleted } from '@/lib/storage-cache';
+import { getOfflineCache, getStorageCache, setStorageCache, syncUserFollow, syncPostDeleted } from '@/lib/storage-cache';
 
 interface ProfileData {
   user: SafeUser;
@@ -46,24 +46,24 @@ export default function UserProfilePage({
   const router = useRouter();
 
   const [profile, setProfile] = useState<ProfileData | null>(() => {
-    return getStorageCache<ProfileData>(`lioran_cached_profile_${username}`) || null;
+    return getOfflineCache<ProfileData>(`lioran_cached_profile_${username}`) || null;
   });
   const [loading, setLoading] = useState(() => {
-    const cached = getStorageCache<ProfileData>(`lioran_cached_profile_${username}`);
-    return !(cached && cached.user);
+    const offlineCache = getOfflineCache<ProfileData>(`lioran_cached_profile_${username}`);
+    return !(offlineCache && offlineCache.user);
   });
   const [notFound, setNotFound] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
 
-  // Tabs & Media State (Initialized with lazy cache)
+  // Tabs & Media State (Loaded fresh, or from cache only if offline)
   const [activeTab, setActiveTab] = useState<'posts' | 'reels' | 'saved'>('posts');
   const [savedSubTab, setSavedSubTab] = useState<'posts' | 'reels'>('posts');
   const [isTabTransitioning, setIsTabTransitioning] = useState(false);
   const [userPosts, setUserPosts] = useState<PostCardData[]>(() => {
-    return getStorageCache<PostCardData[]>(`lioran_cached_profile_posts_${username}`) || [];
+    return getOfflineCache<PostCardData[]>(`lioran_cached_profile_posts_${username}`) || [];
   });
   const [userReels, setUserReels] = useState<ReelData[]>(() => {
-    return getStorageCache<ReelData[]>(`lioran_cached_profile_reels_${username}`) || [];
+    return getOfflineCache<ReelData[]>(`lioran_cached_profile_reels_${username}`) || [];
   });
   const [savedPosts, setSavedPosts] = useState<PostCardData[]>([]);
   const [savedReels, setSavedReels] = useState<ReelData[]>([]);
@@ -105,8 +105,16 @@ export default function UserProfilePage({
         setStorageCache(`lioran_cached_profile_${username}`, data);
         return { notFound: false, profile: data };
       }
+      const fallbackCache = getStorageCache<ProfileData>(`lioran_cached_profile_${username}`);
+      if (fallbackCache?.user) {
+        return { notFound: false, profile: fallbackCache };
+      }
       return { notFound: true, profile: null };
     } catch {
+      const fallbackCache = getStorageCache<ProfileData>(`lioran_cached_profile_${username}`);
+      if (fallbackCache?.user) {
+        return { notFound: false, profile: fallbackCache };
+      }
       return { notFound: true, profile: null };
     }
   }, [username]);
@@ -121,10 +129,10 @@ export default function UserProfilePage({
         setStorageCache(`lioran_cached_profile_posts_${username}`, posts.slice(0, 20));
         return posts;
       }
-      return [];
+      return getStorageCache<PostCardData[]>(`lioran_cached_profile_posts_${username}`) || [];
     } catch (e) {
       console.error('Fetch user posts error:', e);
-      return [];
+      return getStorageCache<PostCardData[]>(`lioran_cached_profile_posts_${username}`) || [];
     }
   }, [username]);
 
@@ -138,10 +146,10 @@ export default function UserProfilePage({
         setStorageCache(`lioran_cached_profile_reels_${username}`, reels.slice(0, 20));
         return reels;
       }
-      return [];
+      return getStorageCache<ReelData[]>(`lioran_cached_profile_reels_${username}`) || [];
     } catch (e) {
       console.error('Fetch user reels error:', e);
-      return [];
+      return getStorageCache<ReelData[]>(`lioran_cached_profile_reels_${username}`) || [];
     }
   }, [username]);
 
