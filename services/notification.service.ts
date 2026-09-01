@@ -2,6 +2,9 @@ import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
 import Notification, { NotificationType } from '@/models/Notification';
 import User from '@/models/User';
+import '@/models/Post';
+import '@/models/Reel';
+import '@/models/Story';
 import { emitSocketEvent } from '@/lib/socket-server';
 
 export interface CreateNotificationParams {
@@ -41,10 +44,31 @@ export async function createNotification(params: CreateNotificationParams) {
       .lean();
 
     if (populated) {
+      const senderDoc = populated.senderId as unknown as {
+        _id?: { toString: () => string };
+        username?: string;
+        displayName?: string;
+        avatar?: string;
+      } | null;
+
+      const senderObj = senderDoc && typeof senderDoc === 'object' && '_id' in senderDoc
+        ? {
+            _id: senderDoc._id ? senderDoc._id.toString() : params.senderId,
+            username: senderDoc.username || 'user',
+            displayName: senderDoc.displayName || 'User',
+            avatar: senderDoc.avatar || '',
+          }
+        : {
+            _id: params.senderId,
+            username: 'user',
+            displayName: 'User',
+            avatar: '',
+          };
+
       emitSocketEvent(`user:${params.recipientId}`, 'notification:new', {
         _id: populated._id.toString(),
         type: populated.type,
-        sender: populated.senderId,
+        sender: senderObj,
         postId: populated.postId,
         reelId: populated.reelId,
         storyId: populated.storyId,
@@ -126,17 +150,40 @@ export async function getUserNotifications(userId: string, limit = 40) {
   });
 
   return {
-    notifications: notifications.map((n) => ({
-      _id: n._id.toString(),
-      type: n.type,
-      sender: n.senderId,
-      post: n.postId,
-      reel: n.reelId,
-      story: n.storyId,
-      commentText: n.commentText,
-      isRead: n.isRead,
-      createdAt: n.createdAt,
-    })),
+    notifications: notifications.map((n) => {
+      const senderDoc = n.senderId as unknown as {
+        _id?: { toString: () => string };
+        username?: string;
+        displayName?: string;
+        avatar?: string;
+      } | null;
+
+      const senderObj = senderDoc && typeof senderDoc === 'object' && '_id' in senderDoc
+        ? {
+            _id: senderDoc._id ? senderDoc._id.toString() : (senderDoc as unknown as { toString: () => string }).toString(),
+            username: senderDoc.username || 'user',
+            displayName: senderDoc.displayName || 'User',
+            avatar: senderDoc.avatar || '',
+          }
+        : {
+            _id: n.senderId ? (n.senderId as unknown as { toString: () => string }).toString() : '',
+            username: 'user',
+            displayName: 'User',
+            avatar: '',
+          };
+
+      return {
+        _id: n._id.toString(),
+        type: n.type,
+        sender: senderObj,
+        post: n.postId,
+        reel: n.reelId,
+        story: n.storyId,
+        commentText: n.commentText,
+        isRead: n.isRead,
+        createdAt: n.createdAt,
+      };
+    }),
     unreadCount,
   };
 }

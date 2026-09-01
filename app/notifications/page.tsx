@@ -61,7 +61,7 @@ export default function NotificationsPage() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications');
+      const res = await fetch('/api/notifications', { cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
         return data.notifications || [];
@@ -91,8 +91,24 @@ export default function NotificationsPage() {
       }
     });
 
+    const handleWindowFocus = () => {
+      fetchNotifications().then((notifs) => {
+        if (isMounted && notifs.length > 0) {
+          setNotifications(notifs);
+        }
+      });
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleWindowFocus();
+      }
+    });
+
     return () => {
       isMounted = false;
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, [fetchNotifications]);
 
@@ -101,7 +117,11 @@ export default function NotificationsPage() {
     if (!socket || !user) return;
 
     const handleNewNotification = (newNotif: NotificationItem) => {
-      setNotifications((prev) => [newNotif, ...prev]);
+      setNotifications((prev) => {
+        const exists = prev.some((n) => n._id === newNotif._id);
+        if (exists) return prev;
+        return [newNotif, ...prev];
+      });
     };
 
     socket.on('notification:new', handleNewNotification);
@@ -247,7 +267,7 @@ export default function NotificationsPage() {
                         {(notif.type === 'comment_post' || notif.type === 'comment_reel') && (
                           <MessageCircle className="w-2.5 h-2.5 text-emerald-400 fill-emerald-400" />
                         )}
-                        {notif.type === 'reply_comment' && (
+                        {(notif.type === 'reply_comment' || notif.type === 'reply_story') && (
                           <Reply className="w-2.5 h-2.5 text-amber-400" />
                         )}
                         {(notif.type === 'mention_post' || notif.type === 'mention_reel' || notif.type === 'mention_comment') && (
@@ -276,6 +296,11 @@ export default function NotificationsPage() {
                         {notif.type === 'like_reel' && 'liked your reel.'}
                         {notif.type === 'like_story' && 'liked your story.'}
                         {notif.type === 'new_story' && 'added a new story.'}
+                        {notif.type === 'reply_story' && (
+                          <span>
+                            replied to your story: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>
+                          </span>
+                        )}
                         {notif.type === 'like_comment' && (
                           <span>
                             liked your comment: <span className="text-zinc-400 italic break-all">&ldquo;{notif.commentText}&rdquo;</span>

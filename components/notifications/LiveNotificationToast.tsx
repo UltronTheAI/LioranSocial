@@ -82,6 +82,10 @@ export function LiveNotificationToast() {
           desc = `${senderName} liked your story`;
           link = '/';
           break;
+        case 'reply_story':
+          desc = `${senderName} replied to your story: "${notif.commentText || ''}"`;
+          link = notif.sender._id ? `/messages?user=${notif.sender._id}` : '/messages';
+          break;
         case 'comment_post':
           desc = `${senderName} commented on your post`;
           link = '/notifications';
@@ -231,7 +235,7 @@ export function LiveNotificationToast() {
               {toast.type.startsWith('mention') && (
                 <AtSign className="w-2.5 h-2.5 text-blue-400" />
               )}
-              {toast.type === 'reply_comment' && (
+              {(toast.type === 'reply_comment' || toast.type === 'reply_story') && (
                 <Reply className="w-2.5 h-2.5 text-amber-400" />
               )}
             </div>
