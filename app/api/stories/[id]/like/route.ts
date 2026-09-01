@@ -28,9 +28,11 @@ export async function POST(
       return NextResponse.json({ error: 'Story not found.' }, { status: 404 });
     }
 
+    const userObjId = new Types.ObjectId(currentUser._id.toString());
+
     const existingLike = await StoryLike.findOne({
       storyId: story._id,
-      userId: currentUser._id,
+      userId: userObjId,
     });
 
     let isLiked = false;
@@ -45,7 +47,7 @@ export async function POST(
       // Like
       await StoryLike.create({
         storyId: story._id,
-        userId: currentUser._id,
+        userId: userObjId,
         expiresAt: story.expiresAt,
       });
       await Story.findByIdAndUpdate(story._id, {

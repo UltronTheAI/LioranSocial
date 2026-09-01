@@ -9,6 +9,7 @@ import {
   findOrCreateDM,
   persistAndBroadcastMessage,
 } from '@/services/conversation.service';
+import { createNotification } from '@/services/notification.service';
 
 export async function POST(
   req: NextRequest,
@@ -39,11 +40,13 @@ export async function POST(
       return NextResponse.json({ error: 'Story not found or expired' }, { status: 404 });
     }
 
+    const userObjId = new Types.ObjectId(currentUser._id.toString());
+
     // 1. Record StoryReply record
     const reply = await StoryReply.create({
       storyId: story._id,
       storyAuthorId: story.authorId,
-      senderId: currentUser._id,
+      senderId: userObjId,
       text: parseResult.data.text,
       emoji: parseResult.data.emoji,
     });
@@ -61,6 +64,17 @@ export async function POST(
       });
     } catch (e) {
       console.error('Failed to bridge story reply to DM conversation:', e);
+    }
+
+    // 3. Send real-time notification to story author
+    if (story.authorId.toString() !== currentUser._id.toString()) {
+      createNotification({
+        recipientId: story.authorId.toString(),
+        senderId: currentUser._id,
+        type: 'reply_story',
+        storyId: story._id.toString(),
+        commentText: parseResult.data.text || parseResult.data.emoji || 'Replied to your story',
+      }).catch((e) => console.error('Story reply notification error:', e));
     }
 
     return NextResponse.json(

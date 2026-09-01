@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { IStoryMedia } from '@/models/Story';
+import { syncStoryLike } from '@/lib/storage-cache';
 
 export interface StoryItemData {
   _id: string;
@@ -57,6 +58,7 @@ export interface StoryViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStoryViewed?: (storyId: string) => void;
+  onStoryLiked?: (storyId: string, isLiked: boolean, likesCount: number) => void;
 }
 
 interface ViewerItem {
@@ -89,6 +91,7 @@ export function StoryViewerModal({
   isOpen,
   onClose,
   onStoryViewed,
+  onStoryLiked,
 }: StoryViewerModalProps) {
   const { user: currentUser } = useAuth();
 
@@ -306,12 +309,16 @@ export function StoryViewerModal({
 
   // Toggle Story Like
   const handleToggleLike = async () => {
-    if (!currentStory || !currentUser) return;
+    if (!currentStory) return;
+    if (!currentUser) {
+      return;
+    }
 
     const storyId = currentStory._id;
     const nextLiked = !currentStory.isLiked;
     const nextCount = nextLiked ? (currentStory.likesCount || 0) + 1 : Math.max(0, (currentStory.likesCount || 0) - 1);
 
+    // 1. Optimistic update
     setStoryGroups((prev) =>
       prev.map((g, aIdx) =>
         aIdx === authorIndex
@@ -324,6 +331,10 @@ export function StoryViewerModal({
           : g
       )
     );
+
+    // 2. Global storage cache and parent sync
+    syncStoryLike(storyId, nextLiked, nextCount);
+    onStoryLiked?.(storyId, nextLiked, nextCount);
 
     if (nextLiked) {
       setShowHeartPop(true);
@@ -346,6 +357,8 @@ export function StoryViewerModal({
               : g
           )
         );
+        syncStoryLike(storyId, data.isLiked, data.likesCount);
+        onStoryLiked?.(storyId, data.isLiked, data.likesCount);
       }
     } catch (e) {
       console.error('Toggle story like error:', e);
@@ -395,16 +408,19 @@ export function StoryViewerModal({
   // Send quick reaction
   const handleSendReaction = async (emoji: string) => {
     if (!currentStory || isSubmittingReply) return;
+    if (!currentUser) return;
     setIsSubmittingReply(true);
 
     try {
-      await fetch(`/api/stories/${currentStory._id}/reply`, {
+      const res = await fetch(`/api/stories/${currentStory._id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emoji }),
       });
-      setSentToast(true);
-      setTimeout(() => setSentToast(false), 2000);
+      if (res.ok) {
+        setSentToast(true);
+        setTimeout(() => setSentToast(false), 2000);
+      }
     } catch (e) {
       console.error('Send reaction error:', e);
     } finally {
@@ -416,17 +432,20 @@ export function StoryViewerModal({
   const handleSendTextReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentStory || !replyText.trim() || isSubmittingReply) return;
+    if (!currentUser) return;
     setIsSubmittingReply(true);
 
     try {
-      await fetch(`/api/stories/${currentStory._id}/reply`, {
+      const res = await fetch(`/api/stories/${currentStory._id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: replyText.trim() }),
       });
-      setReplyText('');
-      setSentToast(true);
-      setTimeout(() => setSentToast(false), 2000);
+      if (res.ok) {
+        setReplyText('');
+        setSentToast(true);
+        setTimeout(() => setSentToast(false), 2000);
+      }
     } catch (e) {
       console.error('Send text reply error:', e);
     } finally {
@@ -486,15 +505,14 @@ export function StoryViewerModal({
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full h-[100dvh] md:h-screen md:w-[calc(100vh*9/16)] md:max-w-[480px] bg-black rounded-none md:rounded-2xl overflow-hidden shadow-2xl border-0 md:border md:border-[#27272a]/60 flex flex-col justify-between"
-        onPointerDown={() => setIsHolding(true)}
-        onPointerUp={() => setIsHolding(false)}
-        onPointerCancel={() => setIsHolding(false)}
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* ================================================================= */}
         {/* Top: Progress Bars & Author Header */}
         {/* ================================================================= */}
         <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           className={`relative z-30 p-3.5 space-y-3 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-200 ${
             isHolding ? 'opacity-0' : 'opacity-100'
           }`}
@@ -579,9 +597,14 @@ export function StoryViewerModal({
         {/* ================================================================= */}
         {/* Media (Image or Video / Shared Content Card) */}
         {/* ================================================================= */}
-        <div className={`absolute inset-0 z-10 flex items-center justify-center ${
-          currentStory.sharedContent ? 'bg-gradient-to-b from-indigo-950/80 via-[#18181b] to-black p-4' : 'bg-black'
-        }`}>
+        <div
+          onPointerDown={() => setIsHolding(true)}
+          onPointerUp={() => setIsHolding(false)}
+          onPointerCancel={() => setIsHolding(false)}
+          className={`absolute inset-0 z-10 flex items-center justify-center ${
+            currentStory.sharedContent ? 'bg-gradient-to-b from-indigo-950/80 via-[#18181b] to-black p-4' : 'bg-black'
+          }`}
+        >
           {currentStory.sharedContent ? (
             /* Compact Shared Story Card */
             <div className="relative w-[86%] max-h-[64%] bg-black/90 rounded-2xl overflow-hidden border border-white/20 shadow-2xl flex flex-col group/card animate-in zoom-in-95 duration-200">
@@ -707,6 +730,8 @@ export function StoryViewerModal({
         {/* Bottom: Author Viewers Pill / Viewer Reactions & Likes */}
         {/* ================================================================= */}
         <div
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           className={`relative z-30 p-3.5 space-y-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-200 ${
             isHolding ? 'opacity-0' : 'opacity-100'
           }`}
@@ -739,75 +764,83 @@ export function StoryViewerModal({
                 <ChevronUp className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
               </button>
             </div>
-          ) : (
-            currentUser && (
-              <>
-                {/* Quick Reactions Bar */}
-                <div className="flex items-center justify-around py-1">
-                  {EMOJI_REACTIONS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSendReaction(emoji);
-                      }}
-                      className="text-xl sm:text-2xl hover:scale-125 active:scale-95 transition-transform cursor-pointer"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Reply Input and Story Heart Button */}
-                <div className="flex items-center gap-2">
-                  <form
-                    onSubmit={(e) => {
-                      e.stopPropagation();
-                      handleSendTextReply(e);
-                    }}
-                    className="flex-1 flex items-center gap-2"
-                  >
-                    <input
-                      type="text"
-                      placeholder={`Reply to ${currentGroup.author.username}...`}
-                      value={replyText}
-                      onFocus={() => setIsTypingReply(true)}
-                      onBlur={() => setIsTypingReply(false)}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      className="flex-1 rounded-full bg-white/20 backdrop-blur-md px-4 py-2 text-xs text-white placeholder:text-white/60 border border-white/20 focus:outline-none focus:border-white transition-colors"
-                      maxLength={300}
-                    />
-                    {replyText.trim().length > 0 && (
-                      <button
-                        type="submit"
-                        disabled={isSubmittingReply}
-                        className="p-2 rounded-full bg-white text-zinc-950 font-bold hover:bg-zinc-200 transition-colors cursor-pointer shrink-0"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </form>
-
-                  {/* Story Like Heart Button */}
+          ) : currentUser ? (
+            <>
+              {/* Quick Reactions Bar */}
+              <div className="flex items-center justify-around py-1">
+                {EMOJI_REACTIONS.map((emoji) => (
                   <button
+                    key={emoji}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleToggleLike();
+                      handleSendReaction(emoji);
                     }}
-                    className={`p-2 rounded-full backdrop-blur-md border transition-transform active:scale-125 cursor-pointer shrink-0 ${
-                      currentStory.isLiked
-                        ? 'bg-rose-500/20 border-rose-500/40 text-rose-500'
-                        : 'bg-white/20 border-white/20 text-white hover:bg-white/30'
-                    }`}
-                    title={currentStory.isLiked ? 'Unlike Story' : 'Like Story'}
+                    className="text-xl sm:text-2xl hover:scale-125 active:scale-95 transition-transform cursor-pointer"
                   >
-                    <Heart className={`w-4 h-4 ${currentStory.isLiked ? 'fill-rose-500' : ''}`} />
+                    {emoji}
                   </button>
-                </div>
-              </>
-            )
+                ))}
+              </div>
+
+              {/* Reply Input and Story Heart Button */}
+              <div className="flex items-center gap-2">
+                <form
+                  onSubmit={(e) => {
+                    e.stopPropagation();
+                    handleSendTextReply(e);
+                  }}
+                  className="flex-1 flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    placeholder={`Reply to ${currentGroup.author.username}...`}
+                    value={replyText}
+                    onFocus={() => setIsTypingReply(true)}
+                    onBlur={() => setIsTypingReply(false)}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    className="flex-1 rounded-full bg-white/20 backdrop-blur-md px-4 py-2 text-xs text-white placeholder:text-white/60 border border-white/20 focus:outline-none focus:border-white transition-colors"
+                    maxLength={300}
+                  />
+                  {replyText.trim().length > 0 && (
+                    <button
+                      type="submit"
+                      disabled={isSubmittingReply}
+                      className="p-2 rounded-full bg-white text-zinc-950 font-bold hover:bg-zinc-200 transition-colors cursor-pointer shrink-0"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </form>
+
+                {/* Story Like Heart Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleLike();
+                  }}
+                  className={`p-2 rounded-full backdrop-blur-md border transition-transform active:scale-125 cursor-pointer shrink-0 ${
+                    currentStory.isLiked
+                      ? 'bg-rose-500/20 border-rose-500/40 text-rose-500'
+                      : 'bg-white/20 border-white/20 text-white hover:bg-white/30'
+                  }`}
+                  title={currentStory.isLiked ? 'Unlike Story' : 'Like Story'}
+                >
+                  <Heart className={`w-4 h-4 ${currentStory.isLiked ? 'fill-rose-500' : ''}`} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-between pt-1">
+              <Link
+                href="/login"
+                onClick={onClose}
+                className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-white text-zinc-950 font-bold text-xs hover:bg-zinc-200 transition-colors shadow-lg"
+              >
+                Log In to React or Reply
+              </Link>
+            </div>
           )}
         </div>
 

@@ -5,6 +5,7 @@ export type NotificationType =
   | 'like_post'
   | 'like_reel'
   | 'like_story'
+  | 'reply_story'
   | 'comment_post'
   | 'comment_reel'
   | 'message'

@@ -347,3 +347,27 @@ export function syncStoryViewed(storyId: string, currentUserId?: string): void {
 
   setStorageCache(STORIES_CACHE_KEY, sorted);
 }
+
+/**
+ * Synchronize story like status and count in Stories cache
+ */
+export function syncStoryLike(storyId: string, isLiked: boolean, likesCount: number): void {
+  if (typeof window === 'undefined') return;
+
+  const cachedGroups = getStorageCache<StoryGroupData[]>(STORIES_CACHE_KEY);
+  if (!cachedGroups || !Array.isArray(cachedGroups)) return;
+
+  const updated = cachedGroups.map((g) => {
+    const hasStory = g.stories.some((s) => s._id === storyId);
+    if (!hasStory) return g;
+    const newStories = g.stories.map((s) =>
+      s._id === storyId ? { ...s, isLiked, likesCount } : s
+    );
+    return {
+      ...g,
+      stories: newStories,
+    };
+  });
+
+  setStorageCache(STORIES_CACHE_KEY, updated);
+}

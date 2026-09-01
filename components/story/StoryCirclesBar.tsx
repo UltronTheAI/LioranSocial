@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import { StoryViewerModal, StoryGroupData } from './StoryViewerModal';
 import { CreateStoryModal } from './CreateStoryModal';
-import { getOfflineCache, getStorageCache, setStorageCache, syncStoryViewed, STORIES_CACHE_KEY } from '@/lib/storage-cache';
+import { getOfflineCache, getStorageCache, setStorageCache, syncStoryViewed, syncStoryLike, STORIES_CACHE_KEY } from '@/lib/storage-cache';
 
 export function StoryCirclesBar() {
   const { user: currentUser } = useAuth();
@@ -44,6 +44,22 @@ export function StoryCirclesBar() {
       setStoryGroups(groups);
     }
   }, [fetchStoriesData]);
+
+  const handleStoryLiked = useCallback((storyId: string, isLiked: boolean, likesCount: number) => {
+    syncStoryLike(storyId, isLiked, likesCount);
+    setStoryGroups((prev) =>
+      prev.map((g) => {
+        const hasStory = g.stories.some((s) => s._id === storyId);
+        if (!hasStory) return g;
+        return {
+          ...g,
+          stories: g.stories.map((s) =>
+            s._id === storyId ? { ...s, isLiked, likesCount } : s
+          ),
+        };
+      })
+    );
+  }, []);
 
   const handleStoryViewed = useCallback((storyId: string) => {
     syncStoryViewed(storyId, currentUser?._id);
@@ -194,13 +210,13 @@ export function StoryCirclesBar() {
               className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group"
             >
               <div
-                className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-[2px] ${
+                className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full p-[2.5px] ${
                   group.hasUnseen
-                    ? 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md group-hover:scale-105'
-                    : 'border-2 border-zinc-700 opacity-80 group-hover:opacity-100 group-hover:border-zinc-500'
-                } transition-all duration-200`}
+                    ? 'bg-gradient-to-tr from-yellow-400 via-rose-500 to-purple-600 shadow-md shadow-rose-500/20'
+                    : 'border-2 border-zinc-700/80 group-hover:border-zinc-500'
+                } transition-all`}
               >
-                <div className="w-full h-full rounded-full bg-zinc-800 border-2 border-black overflow-hidden flex items-center justify-center font-bold text-sm text-white">
+                <div className="w-full h-full rounded-full bg-zinc-900 border-2 border-black overflow-hidden flex items-center justify-center font-bold text-sm text-white">
                   {group.author.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -214,8 +230,8 @@ export function StoryCirclesBar() {
                 </div>
               </div>
               <span
-                className={`text-[11px] max-w-[64px] truncate transition-colors ${
-                  group.hasUnseen ? 'font-semibold text-white' : 'font-medium text-zinc-400'
+                className={`text-[11px] max-w-[64px] truncate ${
+                  group.hasUnseen ? 'font-bold text-white' : 'font-medium text-zinc-400'
                 }`}
               >
                 {group.author.username}
@@ -253,6 +269,7 @@ export function StoryCirclesBar() {
             refreshStories();
           }}
           onStoryViewed={handleStoryViewed}
+          onStoryLiked={handleStoryLiked}
         />
       )}
 
