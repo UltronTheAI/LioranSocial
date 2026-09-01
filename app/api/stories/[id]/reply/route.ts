@@ -3,6 +3,12 @@ import { Types } from 'mongoose';
 import { connectToDatabase } from '@/lib/db';
 import Story from '@/models/Story';
 import StoryReply from '@/models/StoryReply';
+import '@/models/User';
+import '@/models/Message';
+import '@/models/Conversation';
+import '@/models/ConversationMember';
+import '@/models/Post';
+import '@/models/Reel';
 import { getCurrentUser } from '@/lib/auth';
 import { createStoryReplySchema } from '@/validators/story.schema';
 import {
@@ -53,15 +59,17 @@ export async function POST(
 
     // 2. Automatically route Story reply/reaction to DM conversation
     try {
-      const dm = await findOrCreateDM(currentUser._id, story.authorId.toString());
-      await persistAndBroadcastMessage({
-        conversationId: dm._id,
-        senderId: currentUser._id,
-        type: 'story_reply',
-        storyId: story._id.toString(),
-        storyReaction: parseResult.data.emoji,
-        text: parseResult.data.text,
-      });
+      if (story.authorId.toString() !== currentUser._id.toString()) {
+        const dm = await findOrCreateDM(currentUser._id, story.authorId.toString());
+        await persistAndBroadcastMessage({
+          conversationId: dm._id,
+          senderId: currentUser._id,
+          type: 'story_reply',
+          storyId: story._id.toString(),
+          storyReaction: parseResult.data.emoji,
+          text: parseResult.data.text,
+        });
+      }
     } catch (e) {
       console.error('Failed to bridge story reply to DM conversation:', e);
     }

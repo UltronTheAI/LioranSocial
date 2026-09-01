@@ -115,7 +115,7 @@ export function StoryViewerModal({
   // Reply & Delete states
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
-  const [sentToast, setSentToast] = useState(false);
+  const [sentToast, setSentToast] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -418,8 +418,8 @@ export function StoryViewerModal({
         body: JSON.stringify({ emoji }),
       });
       if (res.ok) {
-        setSentToast(true);
-        setTimeout(() => setSentToast(false), 2000);
+        setSentToast(`Reacted ${emoji} to @${currentGroup.author.username}'s story`);
+        setTimeout(() => setSentToast(null), 2500);
       }
     } catch (e) {
       console.error('Send reaction error:', e);
@@ -429,9 +429,13 @@ export function StoryViewerModal({
   };
 
   // Send text reply
-  const handleSendTextReply = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentStory || !replyText.trim() || isSubmittingReply) return;
+  const handleSendTextReply = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const textToSend = replyText.trim();
+    if (!currentStory || !textToSend || isSubmittingReply) return;
     if (!currentUser) return;
     setIsSubmittingReply(true);
 
@@ -439,12 +443,12 @@ export function StoryViewerModal({
       const res = await fetch(`/api/stories/${currentStory._id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: replyText.trim() }),
+        body: JSON.stringify({ text: textToSend }),
       });
       if (res.ok) {
         setReplyText('');
-        setSentToast(true);
-        setTimeout(() => setSentToast(false), 2000);
+        setSentToast(`Reply sent to @${currentGroup.author.username}`);
+        setTimeout(() => setSentToast(null), 2500);
       }
     } catch (e) {
       console.error('Send text reply error:', e);
@@ -737,8 +741,9 @@ export function StoryViewerModal({
           }`}
         >
           {sentToast && (
-            <div className="flex items-center justify-center gap-1.5 py-1 text-xs font-semibold text-emerald-400 animate-in fade-in zoom-in-95">
-              <Check className="w-4 h-4" /> Reaction Sent
+            <div className="flex items-center justify-center gap-1.5 py-1 text-xs font-semibold text-emerald-400 animate-in fade-in zoom-in-95 bg-black/60 rounded-full px-3 mx-auto w-fit border border-emerald-500/30">
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{sentToast}</span>
             </div>
           )}
 
@@ -797,14 +802,28 @@ export function StoryViewerModal({
                     placeholder={`Reply to ${currentGroup.author.username}...`}
                     value={replyText}
                     onFocus={() => setIsTypingReply(true)}
-                    onBlur={() => setIsTypingReply(false)}
+                    onBlur={() => {
+                      setTimeout(() => setIsTypingReply(false), 200);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleSendTextReply();
+                      }
+                    }}
                     onChange={(e) => setReplyText(e.target.value)}
                     className="flex-1 rounded-full bg-white/20 backdrop-blur-md px-4 py-2 text-xs text-white placeholder:text-white/60 border border-white/20 focus:outline-none focus:border-white transition-colors"
                     maxLength={300}
                   />
                   {replyText.trim().length > 0 && (
                     <button
-                      type="submit"
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSendTextReply();
+                      }}
                       disabled={isSubmittingReply}
                       className="p-2 rounded-full bg-white text-zinc-950 font-bold hover:bg-zinc-200 transition-colors cursor-pointer shrink-0"
                     >
