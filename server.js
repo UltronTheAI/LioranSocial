@@ -141,31 +141,31 @@ app.prepare().then(() => {
 
     // Realtime typing start
     socket.on('typing:start', ({ conversationId }) => {
-      if (conversationId) {
+      if (conversationId && socket.data.user?._id) {
         socket.to(`conversation:${conversationId}`).emit('typing:start', {
           conversationId,
-          userId: user._id,
-          username: user.username,
+          userId: socket.data.user._id,
+          username: socket.data.user.username || 'User',
         });
       }
     });
 
     // Realtime typing stop
     socket.on('typing:stop', ({ conversationId }) => {
-      if (conversationId) {
+      if (conversationId && socket.data.user?._id) {
         socket.to(`conversation:${conversationId}`).emit('typing:stop', {
           conversationId,
-          userId: user._id,
+          userId: socket.data.user._id,
         });
       }
     });
 
     // Realtime message seen / read
     socket.on('message:read', ({ conversationId, messageIds }) => {
-      if (conversationId) {
+      if (conversationId && socket.data.user?._id) {
         socket.to(`conversation:${conversationId}`).emit('message:read', {
           conversationId,
-          userId: user._id,
+          userId: socket.data.user._id,
           messageIds,
           readAt: new Date().toISOString(),
         });

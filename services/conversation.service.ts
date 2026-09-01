@@ -3,6 +3,10 @@ import { connectToDatabase } from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import ConversationMember from '@/models/ConversationMember';
 import Message, { IMessage } from '@/models/Message';
+import '@/models/User';
+import '@/models/Post';
+import '@/models/Reel';
+import '@/models/Story';
 import { emitSocketEvent } from '@/lib/socket-server';
 
 export interface PopulatedMember {
@@ -322,36 +326,65 @@ export async function getConversationMessages(
   const items = hasMore ? messages.slice(0, limit) : messages;
   const nextCursor = items.length > 0 ? items[items.length - 1]._id.toString() : null;
 
-  const formattedMessages = items.map((msg) => ({
-    _id: msg._id.toString(),
-    conversationId: msg.conversationId.toString(),
-    sender: msg.senderId,
-    type: msg.type,
-    text: msg.deletedAt ? 'This message was deleted' : msg.text,
-    media: msg.deletedAt ? undefined : msg.media,
-    sharedPost: msg.deletedAt ? undefined : msg.sharedPostId,
-    sharedReel: msg.deletedAt ? undefined : msg.sharedReelId,
-    story: msg.deletedAt ? undefined : msg.storyId,
-    storyReaction: msg.deletedAt ? undefined : msg.storyReaction,
-    replyTo: msg.replyTo
+  const formattedMessages = items.map((msg) => {
+    const senderDoc = msg.senderId as unknown as {
+      _id?: { toString: () => string };
+      username?: string;
+      displayName?: string;
+      avatar?: string;
+      emailVerified?: boolean;
+    } | null;
+
+    const senderObj = senderDoc && typeof senderDoc === 'object' && '_id' in senderDoc
       ? {
-          _id: (msg.replyTo as unknown as { _id: { toString(): string } })._id.toString(),
-          type: (msg.replyTo as unknown as { type: string }).type,
-          text: (msg.replyTo as unknown as { text?: string }).text,
-          sender: (msg.replyTo as unknown as { senderId?: { username: string; displayName: string } }).senderId,
+          _id: senderDoc._id ? senderDoc._id.toString() : (senderDoc as unknown as { toString: () => string }).toString(),
+          username: senderDoc.username || 'user',
+          displayName: senderDoc.displayName || 'User',
+          avatar: senderDoc.avatar || '',
+          emailVerified: Boolean(senderDoc.emailVerified),
         }
-      : undefined,
-    reactions: (msg.reactions || []).map((r) => ({
-      userId: (r.userId as unknown as { _id?: { toString(): string }; toString?: () => string })?._id?.toString() || r.userId?.toString(),
-      username: (r.userId as unknown as { username?: string })?.username || '',
-      emoji: r.emoji,
-    })),
-    readBy: msg.readBy || [],
-    isEdited: Boolean(msg.editedAt),
-    isDeleted: Boolean(msg.deletedAt),
-    createdAt: msg.createdAt,
-    editedAt: msg.editedAt,
-  }));
+      : {
+          _id: msg.senderId ? (msg.senderId as unknown as { toString: () => string }).toString() : '',
+          username: 'user',
+          displayName: 'User',
+          avatar: '',
+          emailVerified: false,
+        };
+
+    return {
+      _id: msg._id.toString(),
+      conversationId: msg.conversationId.toString(),
+      sender: senderObj,
+      type: msg.type,
+      text: msg.deletedAt ? 'This message was deleted' : msg.text,
+      media: msg.deletedAt ? undefined : msg.media,
+      sharedPost: msg.deletedAt ? undefined : msg.sharedPostId,
+      sharedReel: msg.deletedAt ? undefined : msg.sharedReelId,
+      story: msg.deletedAt ? undefined : msg.storyId,
+      storyReaction: msg.deletedAt ? undefined : msg.storyReaction,
+      replyTo: msg.replyTo
+        ? {
+            _id: (msg.replyTo as unknown as { _id: { toString(): string } })._id.toString(),
+            type: (msg.replyTo as unknown as { type: string }).type,
+            text: (msg.replyTo as unknown as { text?: string }).text,
+            sender: (msg.replyTo as unknown as { senderId?: { username: string; displayName: string } }).senderId,
+          }
+        : undefined,
+      reactions: (msg.reactions || []).map((r) => ({
+        userId: (r.userId as unknown as { _id?: { toString(): string }; toString?: () => string })?._id?.toString() || r.userId?.toString(),
+        username: (r.userId as unknown as { username?: string })?.username || '',
+        emoji: r.emoji,
+      })),
+      readBy: (msg.readBy || []).map((r) => ({
+        userId: r.userId ? r.userId.toString() : '',
+        readAt: r.readAt,
+      })),
+      isEdited: Boolean(msg.editedAt),
+      isDeleted: Boolean(msg.deletedAt),
+      createdAt: msg.createdAt,
+      editedAt: msg.editedAt,
+    };
+  });
 
   return {
     messages: formattedMessages.reverse(), // Reverse so earliest is first
@@ -432,10 +465,34 @@ export async function persistAndBroadcastMessage(data: {
     })
     .lean();
 
+  const senderDoc = populated!.senderId as unknown as {
+    _id?: { toString: () => string };
+    username?: string;
+    displayName?: string;
+    avatar?: string;
+    emailVerified?: boolean;
+  } | null;
+
+  const senderObj = senderDoc && typeof senderDoc === 'object' && '_id' in senderDoc
+    ? {
+        _id: senderDoc._id ? senderDoc._id.toString() : data.senderId,
+        username: senderDoc.username || 'user',
+        displayName: senderDoc.displayName || 'User',
+        avatar: senderDoc.avatar || '',
+        emailVerified: Boolean(senderDoc.emailVerified),
+      }
+    : {
+        _id: data.senderId,
+        username: 'user',
+        displayName: 'User',
+        avatar: '',
+        emailVerified: false,
+      };
+
   const payload = {
     _id: populated!._id.toString(),
     conversationId: populated!.conversationId.toString(),
-    sender: populated!.senderId,
+    sender: senderObj,
     type: populated!.type,
     text: populated!.text,
     media: populated!.media,
@@ -452,7 +509,10 @@ export async function persistAndBroadcastMessage(data: {
         }
       : undefined,
     reactions: [],
-    readBy: populated!.readBy || [],
+    readBy: (populated!.readBy || []).map((r) => ({
+      userId: r.userId ? r.userId.toString() : '',
+      readAt: r.readAt,
+    })),
     isEdited: false,
     isDeleted: false,
     createdAt: populated!.createdAt,
